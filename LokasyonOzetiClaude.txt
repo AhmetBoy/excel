@@ -1,0 +1,522 @@
+Option Explicit
+
+'==================================================================
+' MODÜL: LokasyonOzeti
+' AMAÇ : Aktif sayfadaki (birden fazla ürünü içerebilen) envanteri
+'        okuyup "Lokasyon Özeti" sayfasına, her ürün için ayrı
+'        lokasyon toplamı raporu olarak yazar.
+'
+'  - Format otomatik algılanır (H/K = Format1, F/J = Format2)
+'  - Ürünler arasında tam boş satır ayırıcı kabul edilir
+'  - İlk satır kesinlikle veri olarak işlenir (asla atlanmaz)
+'  - Lokasyon toplamları Scripting.Dictionary ile hesaplanır
+'  - Lokasyonlar Alan/Kat/Raf/Pozisyon/Harf mantığına göre sıralanır
+'  - Select/Activate işlem sırasında kullanılmaz (performans)
+'==================================================================
+
+' Biçimlendirme sabitleri
+Private Const HEADER_BACK_COLOR As Long = 32896      ' RGB(0,32,96) -> koyu mavi (BGR formatında Long)
+Private Const HEADER_FONT_COLOR As Long = 16777215    ' RGB(255,255,255) beyaz
+
+'------------------------------------------------------------------
+' ANA PROSEDÜR
+'------------------------------------------------------------------
+Sub LokasyonOzet()
+
+    Dim wsData As Worksheet
+    Dim wsOut As Worksheet
+
+    ' Performans ayarları
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.DisplayAlerts = False
+    Application.Calculation = xlCalculationManual
+
+    On Error GoTo TemizleVeCik
+
+    Set wsData = ActiveSheet
+
+    ' Çıktı sayfasını hazırla (varsa silinmez, sadece temizlenir)
+    Set wsOut = HazirlaCiktiSayfasi("Lokasyon Özeti")
+
+    ' Tüm blokları işle ve rapor üret
+    Call ProcessInventory(wsData, wsOut)
+
+    ' Sütun genişliği (Lokasyon sütunu) otomatik ayarlanır
+    wsOut.Columns("A").AutoFit
+    wsOut.Columns("B").ColumnWidth = 45
+
+    ' Yazdırma ayarları: sayfa numaraları ve tekrar eden başlık satırı
+    Call SetupPageNumbers(wsOut)
+
+TemizleVeCik:
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    Application.DisplayAlerts = True
+    Application.Calculation = xlCalculationAutomatic
+
+    If Err.Number <> 0 Then
+        MsgBox "İşlem sırasında hata oluştu: " & Err.Description, vbCritical
+        Exit Sub
+    End If
+
+    ' İşlem bitince kullanıcıyı Lokasyon Özeti sayfasına yönlendir
+    ' (tek seferlik, UX amaçlı - performans kritik döngülerde kullanılmaz)
+    wsOut.Activate
+
+End Sub
+
+'------------------------------------------------------------------
+' Yazdırma sayfa numaralarını ayarlar: her sayfanın altında
+' "Sayfa X / Y" yazar, sayfa düzenini A4/dikey olarak ayarlar.
+'------------------------------------------------------------------
+Private Sub SetupPageNumbers(ws As Worksheet)
+
+    With ws.PageSetup
+        .CenterFooter = "Sayfa &P / &N"
+        .LeftFooter = "Lokasyon Özeti"
+        .RightFooter = "&D  &T"
+        .Orientation = xlPortrait
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$1:$1"
+    End With
+
+End Sub
+
+'------------------------------------------------------------------
+' Çıktı sayfasını hazırlar. Sayfa varsa silinmez, içeriği temizlenir.
+'------------------------------------------------------------------
+Private Function HazirlaCiktiSayfasi(SheetName As String) As Worksheet
+
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(SheetName)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = SheetName
+    Else
+        ws.Cells.Clear
+        ws.AutoFilterMode = False
+    End If
+
+    Set HazirlaCiktiSayfasi = ws
+
+End Function
+
+'------------------------------------------------------------------
+' Aktif sayfadaki tüm ürün bloklarını bulur, her biri için
+' lokasyon özeti üretir ve çıktı sayfasına art arda yazar.
+'------------------------------------------------------------------
+Sub ProcessInventory(wsData As Worksheet, wsOut As Worksheet)
+
+    Dim LastRow As Long
+    Dim SearchRow As Long
+    Dim BlockStart As Long
+    Dim BlockEnd As Long
+    Dim OutRow As Long
+    Dim BlockFound As Boolean
+
+    LastRow = GetLastDataRow(wsData)
+    SearchRow = 1
+    OutRow = 1
+
+    Do
+        BlockFound = GetBlockRange(wsData, SearchRow, LastRow, BlockStart, BlockEnd)
+        If Not BlockFound Then Exit Do
+
+        Call ProcessSingleBlock(wsData, wsOut, BlockStart, BlockEnd, OutRow)
+
+        SearchRow = BlockEnd + 1
+    Loop
+
+    If OutRow = 1 Then
+        wsOut.Range("A1").Value = "İşlenecek veri bulunamadı."
+    End If
+
+End Sub
+
+'------------------------------------------------------------------
+' Kullanılan (dolu) satırların en sonuncusunu, ilgili tüm
+' olası veri sütunlarını (A,B,C,D,E,F,H,J,K,L) tarayarak bulur.
+'------------------------------------------------------------------
+Private Function GetLastDataRow(ws As Worksheet) As Long
+
+    Dim Cols As Variant
+    Dim c As Variant
+    Dim r As Long
+    Dim MaxRow As Long
+
+    Cols = Array("A", "B", "C", "D", "E", "F", "H", "J", "K", "L")
+    MaxRow = 1
+
+    For Each c In Cols
+        r = ws.Cells(ws.Rows.Count, c).End(xlUp).Row
+        If r > MaxRow Then MaxRow = r
+    Next c
+
+    GetLastDataRow = MaxRow
+
+End Function
+
+'------------------------------------------------------------------
+' SearchStartRow'dan itibaren bir sonraki dolu bloğu bulur.
+' Blok = tamamen boş olmayan ardışık satırlar dizisi.
+' Bulunursa True döner ve BlockStart/BlockEnd doldurulur.
+'------------------------------------------------------------------
+Function GetBlockRange(wsData As Worksheet, SearchStartRow As Long, LastRow As Long, _
+                        ByRef BlockStart As Long, ByRef BlockEnd As Long) As Boolean
+
+    Dim r As Long
+
+    r = SearchStartRow
+
+    ' Boş satırları atla (blok başlangıcını bul)
+    Do While r <= LastRow
+        If Not IsRowEmpty(wsData, r) Then Exit Do
+        r = r + 1
+    Loop
+
+    If r > LastRow Then
+        GetBlockRange = False
+        Exit Function
+    End If
+
+    BlockStart = r
+
+    ' Blok sonunu bul (bir sonraki tam boş satıra kadar)
+    Do While r <= LastRow
+        If IsRowEmpty(wsData, r) Then Exit Do
+        r = r + 1
+    Loop
+
+    BlockEnd = r - 1
+    GetBlockRange = True
+
+End Function
+
+'------------------------------------------------------------------
+' Bir satırın A:L aralığında tamamen boş olup olmadığını kontrol eder.
+'------------------------------------------------------------------
+Private Function IsRowEmpty(ws As Worksheet, r As Long) As Boolean
+
+    Dim c As Long
+
+    For c = 1 To 12 ' A..L
+        If Trim(CStr(ws.Cells(r, c).Value)) <> "" Then
+            IsRowEmpty = False
+            Exit Function
+        End If
+    Next c
+
+    IsRowEmpty = True
+
+End Function
+
+'------------------------------------------------------------------
+' Tek bir ürün bloğunu işler: format algılar, lokasyonları toplar,
+' çıktı sayfasına ürün başlığı + özet + tablo + genel toplam yazar.
+'------------------------------------------------------------------
+Private Sub ProcessSingleBlock(wsData As Worksheet, wsOut As Worksheet, _
+                                BlockStart As Long, BlockEnd As Long, ByRef OutRow As Long)
+
+    Dim QtyColIdx As Long
+    Dim LocColIdx As Long
+    Dim FormatType As Integer
+    Dim arr As Variant
+    Dim dict As Object
+    Dim r As Long
+    Dim locVal As String
+    Dim qtyVal As Double
+    Dim BAsin As String
+    Dim XAsin As String
+    Dim TitleVal As String
+
+    ' Format algıla (H/K veya F/J) - dönen indeksler arr() dizisi bazlıdır (1=A...)
+    If Not DetectColumns(wsData, BlockStart, BlockEnd, QtyColIdx, LocColIdx, FormatType) Then
+        wsOut.Cells(OutRow, 1).Value = "HATA: Satır " & BlockStart & "-" & BlockEnd & _
+                                        " için adet sütunu (H veya F) bulunamadı."
+        wsOut.Cells(OutRow, 1).Font.Color = RGB(200, 0, 0)
+        OutRow = OutRow + 2
+        Exit Sub
+    End If
+
+    ' Bloğu tek seferde diziye oku (performans için)
+    arr = wsData.Range(wsData.Cells(BlockStart, 1), wsData.Cells(BlockEnd, 12)).Value2
+
+    ' Ürün bilgilerini ilk satırdan al
+    If FormatType = 1 Then
+        BAsin = CStr(arr(1, 4))  ' D sütunu
+        XAsin = CStr(arr(1, 5))  ' E sütunu
+        TitleVal = ""
+    Else
+        BAsin = CStr(arr(1, 2))  ' B sütunu
+        XAsin = CStr(arr(1, 3))  ' C sütunu
+        TitleVal = CStr(arr(1, 12)) ' L sütunu
+    End If
+
+    ' Lokasyon toplamlarını Dictionary ile hesapla (ilk satır dahil, hiçbir satır atlanmaz)
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    Dim n As Long
+    n = UBound(arr, 1)
+
+    For r = 1 To n
+        If Not IsEmpty(arr(r, QtyColIdx)) And arr(r, QtyColIdx) <> "" Then
+            If Not IsEmpty(arr(r, LocColIdx)) And arr(r, LocColIdx) <> "" Then
+                locVal = CStr(arr(r, LocColIdx))
+                If IsNumeric(arr(r, QtyColIdx)) Then
+                    qtyVal = CDbl(arr(r, QtyColIdx))
+                    If dict.Exists(locVal) Then
+                        dict(locVal) = dict(locVal) + qtyVal
+                    Else
+                        dict.Add locVal, qtyVal
+                    End If
+                End If
+            End If
+        End If
+    Next r
+
+    ' Ürün başlığını yaz (B ASIN / X ASIN / TITLE)
+    Call WriteProductHeader(wsOut, OutRow, BAsin, XAsin, TitleVal, FormatType)
+
+    ' Özet bilgileri yaz (Toplam Lokasyon / Toplam Adet)
+    Dim ToplamAdet As Double
+    Dim v As Variant
+    ToplamAdet = 0
+    For Each v In dict.Items
+        ToplamAdet = ToplamAdet + v
+    Next v
+
+    Call WriteSummary(wsOut, OutRow, dict.Count, ToplamAdet)
+
+    ' Tablo başlığını yaz
+    Dim TableHeaderRow As Long
+    TableHeaderRow = OutRow
+    wsOut.Cells(TableHeaderRow, 1).Value = "Lokasyon"
+    wsOut.Cells(TableHeaderRow, 2).Value = "Adet"
+    OutRow = OutRow + 1
+
+    ' Lokasyon satırlarını yaz
+    Dim FirstDataRow As Long
+    Dim LastDataRow As Long
+    FirstDataRow = OutRow
+
+    Dim key As Variant
+    For Each key In dict.Keys
+        wsOut.Cells(OutRow, 1).Value = key
+        wsOut.Cells(OutRow, 2).Value = dict(key)
+        OutRow = OutRow + 1
+    Next key
+
+    LastDataRow = OutRow - 1
+
+    ' Lokasyonları özel mantığa göre sırala (varsa en az 1 satır olmalı)
+    If LastDataRow >= FirstDataRow Then
+        Call SortLocations(wsOut, FirstDataRow, LastDataRow)
+    End If
+
+    ' Genel Toplam satırı
+    Dim GenelToplamRow As Long
+    GenelToplamRow = OutRow
+    wsOut.Cells(GenelToplamRow, 1).Value = "GENEL TOPLAM"
+    If LastDataRow >= FirstDataRow Then
+        wsOut.Cells(GenelToplamRow, 2).Formula = "=SUM(B" & FirstDataRow & ":B" & LastDataRow & ")"
+    Else
+        wsOut.Cells(GenelToplamRow, 2).Value = 0
+    End If
+    OutRow = GenelToplamRow + 1
+
+    ' Biçimlendirmeyi uygula (ürün başlığından genel toplama kadar)
+    Call FormatTable(wsOut, TableHeaderRow, FirstDataRow, LastDataRow, GenelToplamRow, FormatType)
+
+    ' Bir sonraki ürün için 1 boş satır bırak
+    OutRow = OutRow + 1
+
+End Sub
+
+'------------------------------------------------------------------
+' Blok içinde H sütununda sayısal veri var mı kontrol eder,
+' yoksa F sütununu kontrol eder. Bulunan sütuna göre QtyColIdx /
+' LocColIdx (1=A,2=B,...) ve FormatType (1 veya 2) döner.
+'------------------------------------------------------------------
+Function DetectColumns(wsData As Worksheet, BlockStart As Long, BlockEnd As Long, _
+                        ByRef QtyColIdx As Long, ByRef LocColIdx As Long, _
+                        ByRef FormatType As Integer) As Boolean
+
+    Dim HasH As Boolean
+    Dim HasF As Boolean
+
+    HasH = ColumnHasNumericData(wsData, BlockStart, BlockEnd, "H")
+
+    If HasH Then
+        QtyColIdx = 8   ' H
+        LocColIdx = 11  ' K
+        FormatType = 1
+        DetectColumns = True
+        Exit Function
+    End If
+
+    HasF = ColumnHasNumericData(wsData, BlockStart, BlockEnd, "F")
+
+    If HasF Then
+        QtyColIdx = 6   ' F
+        LocColIdx = 10  ' J
+        FormatType = 2
+        DetectColumns = True
+        Exit Function
+    End If
+
+    DetectColumns = False
+
+End Function
+
+'------------------------------------------------------------------
+' Belirtilen sütunda, belirtilen satır aralığında en az bir
+' sayısal değer olup olmadığını kontrol eder.
+'------------------------------------------------------------------
+Private Function ColumnHasNumericData(ws As Worksheet, StartRow As Long, EndRow As Long, ColLetter As String) As Boolean
+
+    Dim rng As Range
+    Set rng = ws.Range(ColLetter & StartRow & ":" & ColLetter & EndRow)
+
+    If WorksheetFunction.Count(rng) > 0 Then
+        ColumnHasNumericData = True
+    Else
+        ColumnHasNumericData = False
+    End If
+
+End Function
+
+'------------------------------------------------------------------
+' Ürün başlık bilgilerini (B ASIN / X ASIN / TITLE) çıktı sayfasına
+' yazar. OutRow byref güncellenir.
+'------------------------------------------------------------------
+Sub WriteProductHeader(wsOut As Worksheet, ByRef OutRow As Long, _
+                        BAsin As String, XAsin As String, TitleVal As String, FormatType As Integer)
+
+    wsOut.Cells(OutRow, 1).Value = "B ASIN"
+    wsOut.Cells(OutRow, 2).Value = BAsin
+    wsOut.Cells(OutRow, 1).Font.Bold = True
+    OutRow = OutRow + 1
+
+    wsOut.Cells(OutRow, 1).Value = "X ASIN"
+    wsOut.Cells(OutRow, 2).Value = XAsin
+    wsOut.Cells(OutRow, 1).Font.Bold = True
+    OutRow = OutRow + 1
+
+    If FormatType = 2 Then
+        wsOut.Cells(OutRow, 1).Value = "TITLE"
+        wsOut.Cells(OutRow, 2).Value = TitleVal
+        wsOut.Cells(OutRow, 1).Font.Bold = True
+        ' Başlık uzun olabileceği için hücre içinde alt satıra sar
+        wsOut.Cells(OutRow, 2).WrapText = True
+        wsOut.Rows(OutRow).AutoFit
+        OutRow = OutRow + 1
+    End If
+
+End Sub
+
+'------------------------------------------------------------------
+' Özet bilgilerini (Toplam Lokasyon / Toplam Adet) yazar.
+'------------------------------------------------------------------
+Sub WriteSummary(wsOut As Worksheet, ByRef OutRow As Long, LocCount As Long, ToplamAdet As Double)
+
+    wsOut.Cells(OutRow, 1).Value = "Toplam Lokasyon"
+    wsOut.Cells(OutRow, 2).Value = LocCount
+    wsOut.Cells(OutRow, 1).Font.Bold = True
+    OutRow = OutRow + 1
+
+    wsOut.Cells(OutRow, 1).Value = "Toplam Adet"
+    wsOut.Cells(OutRow, 2).Value = ToplamAdet
+    wsOut.Cells(OutRow, 2).NumberFormat = "#,##0"
+    wsOut.Cells(OutRow, 1).Font.Bold = True
+    OutRow = OutRow + 1
+
+End Sub
+
+'------------------------------------------------------------------
+' Lokasyon satırlarını Alan/Kat/Raf/Pozisyon/Harf mantığına göre
+' sıralar. Yardımcı sütunlar (D:H) işlem sonunda silinir.
+'------------------------------------------------------------------
+Sub SortLocations(ws As Worksheet, FirstRow As Long, LastRow As Long)
+
+    Dim i As Long
+    Dim txt As String
+
+    For i = FirstRow To LastRow
+        txt = CStr(ws.Cells(i, 1).Value)
+        ws.Cells(i, 4).Value = Mid(txt, 5, 1)               ' Alan
+        ws.Cells(i, 5).Value = Val(Mid(txt, 3, 1))           ' Kat
+        ws.Cells(i, 6).Value = Val(Mid(txt, 6, 3))           ' Raf
+        ws.Cells(i, 7).Value = Val(Right(txt, 3))            ' Pozisyon
+        ws.Cells(i, 8).Value = Mid(txt, Len(txt) - 3, 1)     ' Harf
+    Next i
+
+    With ws.Sort
+        .SortFields.Clear
+        .SortFields.Add key:=ws.Range("D" & FirstRow & ":D" & LastRow)
+        .SortFields.Add key:=ws.Range("E" & FirstRow & ":E" & LastRow)
+        .SortFields.Add key:=ws.Range("F" & FirstRow & ":F" & LastRow)
+        .SortFields.Add key:=ws.Range("G" & FirstRow & ":G" & LastRow)
+        .SortFields.Add key:=ws.Range("H" & FirstRow & ":H" & LastRow)
+        .SetRange ws.Range("A" & FirstRow & ":H" & LastRow)
+        .Header = xlNo
+        .Apply
+    End With
+
+    ' Yardımcı sütunları temizle
+    ws.Range("D" & FirstRow & ":H" & LastRow).ClearContents
+
+End Sub
+
+'------------------------------------------------------------------
+' Tek bir ürün bölümünü biçimlendirir: başlık, kenarlık, sayı
+' formatı, otomatik filtre, Genel Toplam satırı vurgusu.
+'------------------------------------------------------------------
+Sub FormatTable(ws As Worksheet, TableHeaderRow As Long, FirstDataRow As Long, _
+                 LastDataRow As Long, GenelToplamRow As Long, FormatType As Integer)
+
+    ' Tablo başlığı (Lokasyon / Adet)
+    With ws.Range(ws.Cells(TableHeaderRow, 1), ws.Cells(TableHeaderRow, 2))
+        .Interior.Color = RGB(0, 32, 96)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+        .Font.Size = 11
+        .HorizontalAlignment = xlCenter
+    End With
+
+    ' Tüm bölüm (başlık -> genel toplam) etrafında ince kenarlık
+    Dim SectionTop As Long
+    SectionTop = TableHeaderRow
+
+    With ws.Range(ws.Cells(SectionTop, 1), ws.Cells(GenelToplamRow, 2)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+
+    ' Dış çerçeve kalın
+    ws.Range(ws.Cells(SectionTop, 1), ws.Cells(GenelToplamRow, 2)).BorderAround _
+        LineStyle:=xlContinuous, Weight:=xlMedium
+
+    ' Genel Toplam satırı vurgusu
+    With ws.Range(ws.Cells(GenelToplamRow, 1), ws.Cells(GenelToplamRow, 2))
+        .Interior.Color = RGB(0, 32, 96)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+
+    ' Adet sütunu sayı formatı
+    If LastDataRow >= FirstDataRow Then
+        ws.Range(ws.Cells(FirstDataRow, 2), ws.Cells(GenelToplamRow, 2)).NumberFormat = "#,##0"
+    Else
+        ws.Cells(GenelToplamRow, 2).NumberFormat = "#,##0"
+    End If
+
+    ' Otomatik filtre (sadece tablo başlığı üzerinde)
+    ws.Range(ws.Cells(TableHeaderRow, 1), ws.Cells(TableHeaderRow, 2)).AutoFilter
+
+End Sub
