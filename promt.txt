@@ -1,0 +1,304 @@
+Excel VBA ile profesyonel seviyede çalışan tek bir Module geliştirmeni istiyorum.
+
+Kod temiz, modüler, açıklamalı ve performanslı olmalı.
+
+Kodun tamamı tek modül içerisinde çalışmalıdır.
+
+Kodun tamamını eksiksiz yaz. Hiçbir prosedürü yarım bırakma.
+
+Kod çalıştırıldığında aktif sayfadaki envanteri okuyacak ve "Lokasyon Özeti" isimli yeni bir çalışma sayfası oluşturacaktır.
+
+------------------------------------------------------------
+VERİ YAPISI
+------------------------------------------------------------
+
+Dosyada iki farklı envanter formatı bulunabilir.
+
+Program ilk olarak hangi formatın kullanıldığını otomatik tespit etmelidir.
+
+FORMAT 1
+
+Adet sütunu = H
+Lokasyon sütunu = K
+
+Bu durumda
+
+B ASIN bilgisi = D sütunu
+X ASIN bilgisi = E sütunu
+
+------------------------------------------------------------
+
+FORMAT 2
+
+Adet sütunu = F
+Lokasyon sütunu = J
+
+Bu durumda
+
+B ASIN bilgisi = B sütunu
+X ASIN bilgisi = C sütunu
+TITLE bilgisi = L sütunu
+
+------------------------------------------------------------
+
+Program ilk önce H sütununda sayısal veri olup olmadığını kontrol etmelidir.
+
+Eğer H sütununda adet bilgisi varsa FORMAT 1 kullanılacaktır.
+
+Değilse F sütunu kontrol edilecektir.
+
+Hiçbiri bulunamazsa kullanıcıya hata mesajı gösterilecektir.
+
+------------------------------------------------------------
+BİRDEN FAZLA ENVANTER
+------------------------------------------------------------
+
+Aktif sayfada birden fazla ürün envanteri bulunabilir.
+
+Bu envanterler birbirinden tamamen boş satırlarla ayrılmış olacaktır.
+
+Örneğin
+
+ürün1
+
+(veriler)
+
+boş satır
+
+ürün2
+
+(veriler)
+
+boş satır
+
+ürün3
+
+(veriler)
+
+Program her bloğu bağımsız bir ürün olarak değerlendirmelidir.
+
+Her ürün için ayrı lokasyon özeti oluşturmalıdır.
+
+Her özet arasında 1 boş satır bırakılmalıdır.
+
+------------------------------------------------------------
+LOKASYON TOPLAMA
+------------------------------------------------------------
+
+Her blok içerisinde aynı lokasyona ait adetler Dictionary kullanılarak toplanmalıdır.
+
+Örnek
+
+A001   5
+A001   8
+A001   2
+
+çıktı
+
+A001 15
+
+olmalıdır.
+
+Kesinlikle Pivot Table kullanılmayacaktır.
+
+Sadece Scripting.Dictionary kullanılacaktır.
+
+------------------------------------------------------------
+İLK SATIR
+------------------------------------------------------------
+
+Kod ilk satırı ASLA atlamamalıdır.
+
+İlk satır veri olabilir.
+
+Kod bunu doğru değerlendirmelidir.
+
+------------------------------------------------------------
+ÖZET SAYFASI
+------------------------------------------------------------
+
+Yeni sayfanın adı
+
+Lokasyon Özeti
+
+olacaktır.
+
+Sayfa varsa silinmeyecek.
+
+İçeriği temizlenecektir.
+
+------------------------------------------------------------
+ÜRÜN BİLGİLERİ
+------------------------------------------------------------
+
+Her özetin başında
+
+B ASIN
+
+X ASIN
+
+FORMAT2 ise ayrıca
+
+TITLE
+
+bulunacaktır.
+
+Bilgiler ilgili bloğun ilk satırından alınacaktır.
+
+------------------------------------------------------------
+ÖZET BİLGİLER
+------------------------------------------------------------
+
+Her ürün için
+
+Toplam Lokasyon
+
+Toplam Adet
+
+bilgileri yazılacaktır.
+
+------------------------------------------------------------
+TABLO
+------------------------------------------------------------
+
+Ardından
+
+Lokasyon
+
+Adet
+
+başlıklı tablo oluşturulacaktır.
+
+------------------------------------------------------------
+GENEL TOPLAM
+------------------------------------------------------------
+
+Tablonun sonunda
+
+GENEL TOPLAM
+
+satırı bulunacaktır.
+
+Adet sütunu SUM formülü ile hesaplanmalıdır.
+
+------------------------------------------------------------
+LOKASYON SIRALAMA
+------------------------------------------------------------
+
+Lokasyonlar alfabetik sıralanmayacaktır.
+
+Aşağıdaki mantık kullanılacaktır.
+
+Alan
+Kat
+Raf
+Pozisyon
+Harf
+
+Lokasyon aşağıdaki şekilde parçalanmalıdır.
+
+Alan = Mid(txt,5,1)
+
+Kat = Val(Mid(txt,3,1))
+
+Raf = Val(Mid(txt,6,3))
+
+Pozisyon = Val(Right(txt,3))
+
+Harf = Mid(txt,Len(txt)-3,1)
+
+Bu değerlere göre sıralama yapılmalıdır.
+
+İşlem bittikten sonra yardımcı sütunlar silinmelidir.
+
+------------------------------------------------------------
+BİÇİMLENDİRME
+------------------------------------------------------------
+
+Başlık
+
+Koyu mavi arkaplan
+
+Beyaz yazı
+
+Kalın
+
+11 punto
+
+Ortalanmış
+
+Tablonun tamamı kenarlıklı olmalıdır.
+
+Dış çerçeve kalın olmalıdır.
+
+GENEL TOPLAM satırı koyu mavi zemin beyaz yazı olmalıdır.
+
+Adet sütunu
+
+#,##0
+
+formatında olmalıdır.
+
+AutoFilter uygulanmalıdır.
+
+Sütun genişlikleri AutoFit yapılmalıdır.
+
+------------------------------------------------------------
+KOD KALİTESİ
+------------------------------------------------------------
+
+Kod kesinlikle modüler yazılmalıdır.
+
+Aşağıdaki prosedürler oluşturulmalıdır.
+
+Sub LokasyonOzet()
+
+ProcessInventory()
+
+SortLocations()
+
+FormatTable()
+
+DetectColumns()
+
+GetBlockRange()
+
+WriteProductHeader()
+
+WriteSummary()
+
+Kod okunabilir olmalıdır.
+
+Bol miktarda yorum satırı kullanılmalıdır.
+
+Option Explicit kullanılmalıdır.
+
+Tüm değişkenler tanımlanmalıdır.
+
+Performans açısından Dictionary kullanılmalıdır.
+
+Select ve Activate kullanılmamalıdır.
+
+Kod 100.000 satır veri üzerinde de hızlı çalışmalıdır.
+
+Hiçbir prosedür eksik bırakılmamalıdır.
+
+Kod tek seferde derlenebilir ve çalıştırılabilir şekilde eksiksiz yazılmalıdır.
+
+Kodun sonunda örnek kullanım veya açıklama yazma.
+
+Sadece çalışan VBA kodunu üret.
+
+
+öncelikle tablo olarak envanteri verdigimde ilk satırı siliyor. diğerlerini yapıyor. buyüzden toplam sayı uyuşmuyor.
+Eğer H sütununda sayısal değer varsa;
+Adet = H , Lokasyon = K ve buna ek olarak Fazladan sag tarafa ek 2 sütun ekliyelim yalnızca birer satır olarak. B ASIN sütun adı olsun D sütununun birinci degeri, X ASIN sütun adı olsun E sütunun birinci degeri olsun. Degerler hep aynı oldugu için 1 satır yazılması yeterlidir.
+Değilse F sütununda sayısal değer varsa
+Adet = F , Lokasyon = J ise ;
+sag tarafa 3 sütun ekleyelim. B ASIN sütun adı B sütundaki birinci deger, X ASIN C sütundaki birinci deger, TITLE L sütunundaki birinci değer olsun.
+Ve ayrıca bunu bir adım öteye götürelim ve ben birden fazla tablo atacagım ve bunları boş bir satırla ayıracagım.ona göre birden fazla ürünün envanterini düzenleyebilirmisin?
+her boş satırda oluşturulacak olan tablomuzun genel toplamından sonra 1 aynı şekilde 1 satır boş bırakabilirsin.
+
+
+
+

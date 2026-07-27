@@ -1,0 +1,170 @@
+Option Explicit
+
+Sub LokasyonOzet()
+
+    Dim wsData As Worksheet
+    Dim wsOut As Worksheet
+    Dim LastRow As Long
+    Dim QtyCol As String
+    Dim LocCol As String
+    Dim i As Long
+    Dim dict As Object
+    Dim key As Variant
+
+    Set wsData = ActiveSheet
+
+    'H sütununda sayı var mı?
+    If WorksheetFunction.Count(wsData.Columns("H")) > 0 Then
+        QtyCol = "H"
+        LocCol = "K"
+    ElseIf WorksheetFunction.Count(wsData.Columns("F")) > 0 Then
+        QtyCol = "F"
+        LocCol = "J"
+    Else
+        MsgBox "H veya F sütununda adet bulunamadı."
+        Exit Sub
+    End If
+
+    LastRow = wsData.Cells(wsData.Rows.Count, QtyCol).End(xlUp).Row
+
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    For i = 2 To LastRow
+
+        If wsData.Cells(i, QtyCol).Value <> "" _
+        And wsData.Cells(i, LocCol).Value <> "" Then
+
+            If dict.Exists(wsData.Cells(i, LocCol).Value) Then
+
+                dict(wsData.Cells(i, LocCol).Value) = _
+                dict(wsData.Cells(i, LocCol).Value) + _
+                CDbl(wsData.Cells(i, QtyCol).Value)
+
+            Else
+
+                dict.Add wsData.Cells(i, LocCol).Value, _
+                CDbl(wsData.Cells(i, QtyCol).Value)
+
+            End If
+
+        End If
+
+    Next i
+
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    Worksheets("Lokasyon Özeti").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+    Set wsOut = Worksheets.Add
+    wsOut.Name = "Lokasyon Özeti"
+
+    wsOut.Range("A1") = "Lokasyon"
+    wsOut.Range("B1") = "Adet"
+
+    i = 2
+
+    For Each key In dict.Keys
+
+        wsOut.Cells(i, 1) = key
+        wsOut.Cells(i, 2) = dict(key)
+
+        i = i + 1
+
+    Next
+
+    Call SortLocations(wsOut, i - 1)
+
+End Sub
+
+Sub SortLocations(ws As Worksheet, LastRow As Long)
+
+    Dim i As Long
+    Dim txt As String
+
+    ws.Cells(1, 3) = "Alan"
+    ws.Cells(1, 4) = "Kat"
+    ws.Cells(1, 5) = "Raf"
+    ws.Cells(1, 6) = "Pozisyon"
+    ws.Cells(1, 7) = "Harf"
+
+    For i = 2 To LastRow
+
+        txt = ws.Cells(i, 1)
+
+        ws.Cells(i, 3) = Mid(txt, 5, 1)
+        ws.Cells(i, 4) = Val(Mid(txt, 3, 1))
+        ws.Cells(i, 5) = Val(Mid(txt, 6, 3))
+        ws.Cells(i, 6) = Val(Right(txt, 3))
+        ws.Cells(i, 7) = Mid(txt, Len(txt) - 3, 1)
+
+    Next
+
+    With ws.Sort
+
+        .SortFields.Clear
+
+        .SortFields.Add key:=ws.Range("C2:C" & LastRow)
+        .SortFields.Add key:=ws.Range("D2:D" & LastRow)
+        .SortFields.Add key:=ws.Range("E2:E" & LastRow)
+        .SortFields.Add key:=ws.Range("F2:F" & LastRow)
+        .SortFields.Add key:=ws.Range("G2:G" & LastRow)
+
+        .SetRange ws.Range("A1:G" & LastRow)
+        .Header = xlYes
+        .Apply
+
+    End With
+
+        'Genel Toplam
+ws.Cells(LastRow + 2, 1) = "GENEL TOPLAM"
+ws.Cells(LastRow + 2, 2).Formula = "=SUM(B2:B" & LastRow & ")"
+
+'Yardımcı sütunları sil
+ws.Columns("C:G").Delete
+
+Dim SonSatir As Long
+SonSatir = LastRow + 2
+
+'======================
+' BİÇİMLENDİRME
+'======================
+
+'Başlık
+With ws.Range("A1:B1")
+    .Interior.Color = RGB(0, 32, 96)
+    .Font.Color = RGB(255, 255, 255)
+    .Font.Bold = True
+    .Font.Size = 11
+    .HorizontalAlignment = xlCenter
+End With
+
+'Tablo kenarlıkları
+With ws.Range("A1:B" & SonSatir).Borders
+    .LineStyle = xlContinuous
+    .Weight = xlThin
+End With
+
+'Dış çerçeve
+ws.Range("A1:B" & SonSatir).BorderAround _
+    LineStyle:=xlContinuous, _
+    Weight:=xlMedium
+
+'Genel Toplam satırı
+With ws.Range("A" & SonSatir & ":B" & SonSatir)
+    .Interior.Color = RGB(0, 32, 96)
+    .Font.Color = RGB(255, 255, 255)
+    .Font.Bold = True
+End With
+
+'Adet biçimi
+ws.Range("B2:B" & SonSatir).NumberFormat = "#,##0"
+
+'Otomatik filtre
+ws.Range("A1:B1").AutoFilter
+
+'Sütun genişliği
+ws.Columns("A:B").AutoFit
+End Sub
+
