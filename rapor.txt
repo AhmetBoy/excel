@@ -1,0 +1,348 @@
+Option Explicit
+
+'==========================================================
+' AYARLAR - Sayfa düzeniniz farklıysa sadece burayı değiştirin
+'==========================================================
+Const COL_AD As String = "A"          ' Ad Soyad
+Const COL_KULLANICI As String = "B"   ' Kullanıcı Adı
+Const COL_BIRIM As String = "C"       ' Birim
+Const COL_MESAI As String = "D"       ' Mesai başlangıç saati (örn: 07.00)
+Const SAYAC_OFSET As Long = 6         ' Kullanıcı adı sütunundan "saatlik veri" (J) sütununa kaç sütun sağda
+
+' Kurumsal renk paleti
+Const RENK_BASLIK As Long = 6245150        ' RGB(30,58,95) - kurumsal lacivert
+Const RENK_BASLIK_FONT As Long = 16777215  ' Beyaz font
+Const RENK_ZEBRA As Long = 15921906        ' RGB(242,242,242) - açık gri, alternatif satır dolgusu
+Const RENK_TOPLAM_SATIR As Long = 6245150 ' RGB(30,58,95) - başlıkla aynı lacivert, TOPLAM satırı dolgusu
+
+' Tek renk "en yüksek değer" vurgusu
+Const RENK_MAX As Long = 13561798    ' RGB(198,239,206) - açık yeşil dolgu
+Const RENK_MAX_FONT As Long = 24832  ' RGB(0,97,0) - koyu yeşil font
+
+Sub RaporOlustur()
+
+    Dim wsKaynak As Worksheet, wsRapor As Worksheet
+    Dim sonSatirPersonel As Long, sonSatirSistem As Long
+    Dim i As Long, j As Long, b As Long
+    Dim baslangicSaati As Integer
+    Dim blokSayisi As Long
+    Dim blokBaslangic() As Long, blokBitis() As Long
+    Dim durumBosMu As Boolean
+    Dim satirRapor As Long, sutunRapor As Long
+    Dim adSoyad As String, kullaniciAdi As String, birim As String
+    Dim eslesenSatir As Variant
+    Dim deger As Double, rowToplam As Double
+    Dim colSistemBaslangicNo As Long
+    Const BASLIK_SATIRI As Long = 3
+
+    Set wsKaynak = ActiveSheet
+
+    colSistemBaslangicNo = wsKaynak.Columns(COL_MESAI).Column + 1
+
+    '------------------------------------------------------
+    ' 1) Personel listesinin (A:D) son satırını bul
+    '------------------------------------------------------
+    sonSatirPersonel = wsKaynak.Cells(wsKaynak.Rows.Count, COL_AD).End(xlUp).Row
+    If sonSatirPersonel < 1 Then
+        MsgBox "AD SOYAD sütununda veri bulunamadı.", vbExclamation
+        Exit Sub
+    End If
+
+    '------------------------------------------------------
+    ' 2) Mesai başlangıç saatini bul
+    '------------------------------------------------------
+    baslangicSaati = -1
+    For i = 1 To sonSatirPersonel
+        If Trim(wsKaynak.Cells(i, COL_MESAI).Value & "") <> "" Then
+            baslangicSaati = SaatiSayiyaCevir(wsKaynak.Cells(i, COL_MESAI).Value)
+            Exit For
+        End If
+    Next i
+
+    If baslangicSaati = -1 Then
+        MsgBox "Mesai başlangıç saati (" & COL_MESAI & " sütunu) bulunamadı.", vbExclamation
+        Exit Sub
+    End If
+
+    '------------------------------------------------------
+    ' 3) Sistem verisindeki saatlik blokları tespit et
+    '------------------------------------------------------
+    sonSatirSistem = wsKaynak.Cells(wsKaynak.Rows.Count, colSistemBaslangicNo).End(xlUp).Row
+
+    ReDim blokBaslangic(1 To sonSatirSistem)
+    ReDim blokBitis(1 To sonSatirSistem)
+    blokSayisi = 0
+    durumBosMu = True
+
+    For i = 1 To sonSatirSistem
+        If Trim(wsKaynak.Cells(i, colSistemBaslangicNo).Value & "") <> "" Then
+            If durumBosMu Then
+                blokSayisi = blokSayisi + 1
+                blokBaslangic(blokSayisi) = i
+                durumBosMu = False
+            End If
+            blokBitis(blokSayisi) = i
+        Else
+            durumBosMu = True
+        End If
+    Next i
+
+    If blokSayisi = 0 Then
+        MsgBox "Sistem verisi (saatlik bloklar) bulunamadı.", vbExclamation
+        Exit Sub
+    End If
+
+    '------------------------------------------------------
+    ' 4) "Rapor" sayfasını sıfırla / oluştur
+    '------------------------------------------------------
+    Application.DisplayAlerts = False
+    On Error Resume Next
+    ThisWorkbook.Worksheets("Rapor").Delete
+    On Error GoTo 0
+    Application.DisplayAlerts = True
+
+    Set wsRapor = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+    wsRapor.Name = "Rapor"
+
+    sutunRapor = 3 + blokSayisi + 1 ' TOPLAM sütunu
+
+    '------------------------------------------------------
+    ' 5) Üst başlık ve tarih satırları
+    '------------------------------------------------------
+    With wsRapor.Range(wsRapor.Cells(1, 1), wsRapor.Cells(1, sutunRapor))
+        .Merge
+        .Value = "GÜNLÜK PERFORMANS RAPORU"
+        .Font.Bold = True
+        .Font.Size = 14
+        .Font.Color = RENK_BASLIK_FONT
+        .Interior.Color = RENK_BASLIK
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .RowHeight = 26
+    End With
+
+    With wsRapor.Range(wsRapor.Cells(2, 1), wsRapor.Cells(2, sutunRapor))
+        .Merge
+        ' Rapor tarihini isterseniz burada elle değiştirebilirsiniz (varsayılan: bugünün tarihi)
+        .Value = "Rapor Tarihi: " & Format(Date, "dd.mm.yyyy") & _
+                 "   |   Mesai Aralığı: " & SaatAraligiYaz(baslangicSaati) & " - " & SaatAraligiYaz(baslangicSaati + blokSayisi)
+        .Font.Italic = True
+        .Font.Size = 10
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Interior.Color = RENK_ZEBRA
+        .RowHeight = 18
+    End With
+
+    '------------------------------------------------------
+    ' 6) Sütun başlıkları (BASLIK_SATIRI)
+    '------------------------------------------------------
+    wsRapor.Cells(BASLIK_SATIRI, 1).Value = "AD-SOYAD"
+    wsRapor.Cells(BASLIK_SATIRI, 2).Value = "KULLANICI"
+    wsRapor.Cells(BASLIK_SATIRI, 3).Value = "BİRİM"
+
+    For b = 1 To blokSayisi
+        wsRapor.Cells(BASLIK_SATIRI, 3 + b).Value = SaatAraligiYaz(baslangicSaati + b - 1) & "-" & SaatAraligiYaz(baslangicSaati + b)
+    Next b
+
+    wsRapor.Cells(BASLIK_SATIRI, sutunRapor).Value = "TOPLAM"
+
+    With wsRapor.Range(wsRapor.Cells(BASLIK_SATIRI, 1), wsRapor.Cells(BASLIK_SATIRI, sutunRapor))
+        .Font.Bold = True
+        .Font.Color = RENK_BASLIK_FONT
+        .Interior.Color = RENK_BASLIK
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .RowHeight = 20
+    End With
+
+    '------------------------------------------------------
+    ' 7) Her personel için satır oluştur ve blokları tara
+    '------------------------------------------------------
+    satirRapor = BASLIK_SATIRI + 1
+
+    For i = 1 To sonSatirPersonel
+
+        adSoyad = Trim(wsKaynak.Cells(i, COL_AD).Value & "")
+        If adSoyad <> "" Then
+
+            kullaniciAdi = Trim(wsKaynak.Cells(i, COL_KULLANICI).Value & "")
+            birim = Trim(wsKaynak.Cells(i, COL_BIRIM).Value & "")
+
+            wsRapor.Cells(satirRapor, 1).Value = adSoyad
+            wsRapor.Cells(satirRapor, 2).Value = kullaniciAdi
+            wsRapor.Cells(satirRapor, 3).Value = birim
+
+            rowToplam = 0
+
+            For b = 1 To blokSayisi
+
+                deger = 0
+
+                eslesenSatir = Application.Match(kullaniciAdi, _
+                    wsKaynak.Range(wsKaynak.Cells(blokBaslangic(b), colSistemBaslangicNo), _
+                                   wsKaynak.Cells(blokBitis(b), colSistemBaslangicNo)), 0)
+
+                If Not IsError(eslesenSatir) Then
+                    Dim satirNo As Long
+                    satirNo = blokBaslangic(b) + CLng(eslesenSatir) - 1
+                    deger = Val(wsKaynak.Cells(satirNo, colSistemBaslangicNo + SAYAC_OFSET).Value)
+                End If
+
+                wsRapor.Cells(satirRapor, 3 + b).Value = deger
+                rowToplam = rowToplam + deger
+
+            Next b
+
+            wsRapor.Cells(satirRapor, sutunRapor).Value = rowToplam
+
+            ' Zebra deseni (alternatif satır rengi)
+            If (satirRapor - BASLIK_SATIRI) Mod 2 = 0 Then
+                wsRapor.Range(wsRapor.Cells(satirRapor, 1), wsRapor.Cells(satirRapor, sutunRapor)).Interior.Color = RENK_ZEBRA
+            End If
+
+            satirRapor = satirRapor + 1
+
+        End If
+
+    Next i
+
+    Dim sonVeriSatiri As Long
+    sonVeriSatiri = satirRapor - 1
+
+    ' Her saatlik sütunda (07.00-08.00, 08.00-09.00, ...) tüm personel arasında EN YÜKSEK değeri vurgula
+    For b = 1 To blokSayisi
+        ColorMaxDikey wsRapor, BASLIK_SATIRI + 1, sonVeriSatiri, 3 + b
+    Next b
+
+    ' TOPLAM sütununda (kullanıcıların günlük toplamı) EN YÜKSEK değeri vurgula
+    ColorMaxDikey wsRapor, BASLIK_SATIRI + 1, sonVeriSatiri, sutunRapor
+
+    '------------------------------------------------------
+    ' 8) En alta sütun toplamlarını (TOPLAM satırı) ekle
+    '------------------------------------------------------
+    Dim toplamSatiri As Long
+    toplamSatiri = satirRapor + 1
+
+    wsRapor.Cells(toplamSatiri, 1).Value = "TOPLAM"
+
+    For j = 4 To sutunRapor
+        wsRapor.Cells(toplamSatiri, j).Formula = _
+            "=SUM(" & wsRapor.Cells(BASLIK_SATIRI + 1, j).Address(False, False) & ":" & _
+            wsRapor.Cells(sonVeriSatiri, j).Address(False, False) & ")"
+    Next j
+
+    With wsRapor.Range(wsRapor.Cells(toplamSatiri, 1), wsRapor.Cells(toplamSatiri, sutunRapor))
+        .Font.Bold = True
+        .Font.Color = RENK_BASLIK_FONT
+        .Interior.Color = RENK_TOPLAM_SATIR
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders(xlEdgeTop).LineStyle = xlContinuous
+        .Borders(xlEdgeTop).Weight = xlMedium
+        .Borders(xlEdgeTop).Color = RENK_BASLIK
+    End With
+
+    '------------------------------------------------------
+    ' 9) Kenarlıklar, filtre ve kurumsal görünüm
+    '------------------------------------------------------
+    With wsRapor.Range(wsRapor.Cells(BASLIK_SATIRI, 1), wsRapor.Cells(sonVeriSatiri, sutunRapor))
+        .Borders.LineStyle = xlContinuous
+        .Borders.Color = RGB(191, 191, 191)
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+    wsRapor.Range(wsRapor.Cells(BASLIK_SATIRI + 1, 1), wsRapor.Cells(sonVeriSatiri, 2)).HorizontalAlignment = xlLeft
+
+    ' Otomatik filtre (başlık satırından veri sonuna kadar)
+    wsRapor.Range(wsRapor.Cells(BASLIK_SATIRI, 1), wsRapor.Cells(sonVeriSatiri, sutunRapor)).AutoFilter
+
+    With wsRapor
+        .Columns.AutoFit
+        .Columns(1).ColumnWidth = 22
+        .Columns(2).ColumnWidth = 14
+        .Columns(3).ColumnWidth = 14
+        ActiveWindow.FreezePanes = False
+        .Cells(BASLIK_SATIRI + 1, 4).Select
+        ActiveWindow.FreezePanes = True
+        .Cells(1, 1).Select
+    End With
+
+    wsRapor.Activate
+
+    MsgBox "Rapor oluşturuldu." & vbCrLf & _
+           blokSayisi & " saatlik blok bulundu (" & _
+           SaatAraligiYaz(baslangicSaati) & " - " & SaatAraligiYaz(baslangicSaati + blokSayisi) & ")." & vbCrLf & _
+           (sonVeriSatiri - BASLIK_SATIRI) & " personel işlendi.", vbInformation
+
+End Sub
+
+'==========================================================
+' YARDIMCI FONKSİYONLAR
+'==========================================================
+
+Private Function SaatiSayiyaCevir(ByVal deger As Variant) As Integer
+    Dim s As String
+    If VarType(deger) = vbDate Then
+        SaatiSayiyaCevir = Hour(CDate(deger))
+        Exit Function
+    End If
+    s = Trim(deger & "")
+    s = Replace(s, ",", ".")
+    s = Replace(s, ".", ":")
+    If InStr(s, ":") > 0 Then
+        SaatiSayiyaCevir = CInt(Val(Split(s, ":")(0)))
+    Else
+        SaatiSayiyaCevir = CInt(Val(s))
+    End If
+End Function
+
+Private Function SaatAraligiYaz(ByVal saat As Integer) As String
+    Dim s As Integer
+    s = saat Mod 24
+    SaatAraligiYaz = Format(s, "00") & ":00"
+End Function
+
+' Bir SATIR içindeki (yatay) hücrelerden SADECE en yüksek değeri yeşil ile vurgular.
+' Aynı en yüksek değere sahip birden fazla hücre varsa hepsi vurgulanır (gerçek eşitlik durumu).
+Private Sub ColorMaxYatay(ByVal ws As Worksheet, ByVal satir As Long, ByVal ilkSutun As Long, ByVal sonSutun As Long)
+    Dim k As Long, enBuyuk As Double, enBuyukSutun As Long
+    enBuyuk = 0
+    enBuyukSutun = 0
+    For k = ilkSutun To sonSutun
+        If Val(ws.Cells(satir, k).Value) > enBuyuk Then
+            enBuyuk = Val(ws.Cells(satir, k).Value)
+            enBuyukSutun = k
+        End If
+    Next k
+    If enBuyuk <= 0 Or enBuyukSutun = 0 Then Exit Sub
+    With ws.Cells(satir, enBuyukSutun)
+        .Interior.Color = RENK_MAX
+        .Font.Color = RENK_MAX_FONT
+        .Font.Bold = True
+    End With
+End Sub
+
+' Bir SÜTUN içindeki (dikey) hücrelerden SADECE en yüksek değeri yeşil ile vurgular.
+Private Sub ColorMaxDikey(ByVal ws As Worksheet, ByVal ilkSatir As Long, ByVal sonSatir As Long, ByVal sutun As Long)
+    Dim k As Long, enBuyuk As Double
+    enBuyuk = 0
+    For k = ilkSatir To sonSatir
+        If Val(ws.Cells(k, sutun).Value) > enBuyuk Then enBuyuk = Val(ws.Cells(k, sutun).Value)
+    Next k
+    If enBuyuk <= 0 Then Exit Sub
+    For k = ilkSatir To sonSatir
+        If Val(ws.Cells(k, sutun).Value) = enBuyuk Then
+            With ws.Cells(k, sutun)
+                .Interior.Color = RENK_MAX
+                .Font.Color = RENK_MAX_FONT
+                .Font.Bold = True
+            End With
+        End If
+    Next k
+End Sub
+
+
+
+
