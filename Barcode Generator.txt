@@ -1,0 +1,153 @@
+Attribute VB_Name = "BarkodModulu"
+Option Explicit
+
+'=========================================================
+'  BARKOD (CODE 128 - SET B) VBA MODULU
+'  - "Code 128" adinda ucretsiz barkod fontu ile calisir
+'  - Font kurulumu icin: grandzebu.net/informatique/codbar-en/code128.htm
+'    (sayfada "code128.ttf" dosyasini indirip kurun)
+'=========================================================
+
+' Code 128 (Set B) kod degerini fontun ozel karakterine cevirir
+Private Function KodKarakteri(ByVal v As Integer) As String
+    Select Case v
+        Case 0 To 94:  KodKarakteri = Chr(v + 32)
+        Case 95:       KodKarakteri = Chr(202)
+        Case 96:       KodKarakteri = Chr(201)
+        Case 97:       KodKarakteri = Chr(200)
+        Case 98:       KodKarakteri = Chr(199)
+        Case 99:       KodKarakteri = Chr(198)
+        Case 100:      KodKarakteri = Chr(197)
+        Case 101:      KodKarakteri = Chr(196)
+        Case 102:      KodKarakteri = Chr(195)
+        Case 103:      KodKarakteri = Chr(203) ' Start A
+        Case 104:      KodKarakteri = Chr(204) ' Start B
+        Case 105:      KodKarakteri = Chr(205) ' Start C
+        Case 106:      KodKarakteri = Chr(206) ' Stop
+    End Select
+End Function
+
+' Verilen metni Code128 (Set B) barkod font dizisine cevirir.
+' Sadece ASCII 32-126 arasindaki karakterleri destekler (Turkce karakter YOK: c,s,g,i,o,u kullanmayin).
+Public Function Code128B(ByVal metin As String) As String
+    Dim i As Long, v As Integer, checksum As Long, sonuc As String
+
+    If Len(metin) = 0 Then
+        Code128B = ""
+        Exit Function
+    End If
+
+    For i = 1 To Len(metin)
+        v = Asc(Mid(metin, i, 1))
+        If v < 32 Or v > 126 Then
+            Code128B = "" ' gecersiz karakter
+            Exit Function
+        End If
+    Next i
+
+    sonuc = KodKarakteri(104) ' Start B
+    checksum = 104
+
+    For i = 1 To Len(metin)
+        v = Asc(Mid(metin, i, 1)) - 32
+        sonuc = sonuc & KodKarakteri(v)
+        checksum = checksum + v * i
+    Next i
+
+    checksum = checksum Mod 103
+    sonuc = sonuc & KodKarakteri(checksum)
+    sonuc = sonuc & KodKarakteri(106) ' Stop
+
+    Code128B = sonuc
+End Function
+
+'=========================================================
+'  ANA MAKRO
+'  "Veri" sayfasinin A sutunundaki (A2'den itibaren) kodlari
+'  okur, "Barkodlar" sayfasinda her biri ayri bir sayfaya
+'  (page break ile) basilacak sekilde buyuk barkodlar olusturur.
+'=========================================================
+Sub BarkodOlustur()
+    Dim wsVeri As Worksheet, wsBarkod As Worksheet
+    Dim lastRow As Long, i As Long, r As Long, sayac As Long
+    Dim kod As String, barkodMetni As String
+    Dim fontAdi As String
+
+    fontAdi = "Code 128" ' Bilgisayarinizda kurulu font adi farkliysa burayi guncelleyin
+
+    On Error Resume Next
+    Set wsVeri = ThisWorkbook.Sheets("Veri")
+    On Error GoTo 0
+    If wsVeri Is Nothing Then
+        MsgBox "'Veri' adinda bir sayfa bulunamadi." & vbCrLf & _
+               "Lutfen barkoda cevrilecek kodlari 'Veri' sayfasinin A sutununa, A2'den baslayarak girin.", vbExclamation
+        Exit Sub
+    End If
+
+    Application.DisplayAlerts = False
+    On Error Resume Next
+    ThisWorkbook.Sheets("Barkodlar").Delete
+    On Error GoTo 0
+    Application.DisplayAlerts = True
+
+    Set wsBarkod = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+    wsBarkod.Name = "Barkodlar"
+
+    lastRow = wsVeri.Cells(wsVeri.Rows.Count, "A").End(xlUp).Row
+    r = 1
+    sayac = 0
+
+    For i = 2 To lastRow
+        kod = Trim(wsVeri.Cells(i, 1).Value)
+        If kod <> "" Then
+            barkodMetni = Code128B(kod)
+            If barkodMetni = "" Then
+                MsgBox "Satir " & i & " (" & kod & ") barkoda cevrilemedi." & vbCrLf & _
+                       "Sadece standart harf, rakam ve sembol (A-Z, 0-9, bosluk, - vb.) kullanin, Turkce karakter (c,s,g,i,o,u) olmamali.", vbExclamation
+            Else
+                With wsBarkod
+                    .Range(.Cells(r, 1), .Cells(r, 8)).Merge
+                    .Cells(r, 1).Value = barkodMetni
+                    .Cells(r, 1).Font.Name = fontAdi
+                    .Cells(r, 1).Font.Size = 150
+                    .Cells(r, 1).HorizontalAlignment = xlCenter
+                    .Cells(r, 1).VerticalAlignment = xlCenter
+                    .Rows(r).RowHeight = 300
+
+                    .Range(.Cells(r + 1, 1), .Cells(r + 1, 8)).Merge
+                    .Cells(r + 1, 1).Value = kod
+                    .Cells(r + 1, 1).Font.Name = "Arial"
+                    .Cells(r + 1, 1).Font.Size = 28
+                    .Cells(r + 1, 1).Font.Bold = True
+                    .Cells(r + 1, 1).HorizontalAlignment = xlCenter
+                    .Rows(r + 1).RowHeight = 40
+
+                    If r > 1 Then
+                        .HPageBreaks.Add Before:=.Cells(r, 1)
+                    End If
+                End With
+                r = r + 2
+                sayac = sayac + 1
+            End If
+        End If
+    Next i
+
+    With wsBarkod
+        .Columns("A:H").ColumnWidth = 14
+        With .PageSetup
+            .Orientation = xlLandscape
+            .FitToPagesWide = 1
+            .FitToPagesTall = 1
+            .TopMargin = Application.CentimetersToPoints(1)
+            .BottomMargin = Application.CentimetersToPoints(1)
+            .LeftMargin = Application.CentimetersToPoints(1)
+            .RightMargin = Application.CentimetersToPoints(1)
+            .CenterHorizontally = True
+            .CenterVertically = True
+        End With
+    End With
+
+    MsgBox sayac & " adet barkod olusturuldu." & vbCrLf & _
+           "'Barkodlar' sayfasinda her barkod kendi sayfasina yazdirilacak sekilde hazirlandi." & vbCrLf & _
+           "Yazdirmak icin Ctrl+P kullanabilirsiniz.", vbInformation
+End Sub
