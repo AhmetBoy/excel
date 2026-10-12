@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(npm install *)",
+      "Bash(npx vitest *)",
+      "Bash(node --check background/background.js)",
+      "Bash(node --check sidepanel/sidepanel.js)",
+      "Bash(node --check background/services/pandashService.js)"
+    ]
+  }
+}

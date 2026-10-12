@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Warehouse Tote Lookup Assistant",
+  "version": "0.1.0",
+  "description": "Read-only helper that merges tote/product data from Inventory, Pandash, and QT into a single view. Does not modify inventory and does not submit receive/stow/cancel actions.",
+  "permissions": ["tabs", "sidePanel", "offscreen", "storage"],
+  "host_permissions": [
+    "https://qifcr.eu.aftx.amazonoperations.app/*",
+    "https://pandash.eu.aftx.amazonoperations.app/*",
+    "https://qt.eu.aftx.amazonoperations.app/*"
+  ],
+  "background": {
+    "service_worker": "background/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://qt.eu.aftx.amazonoperations.app/*"],
+      "js": ["content-scripts/qtContentScript.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Warehouse Tote Lookup Assistant"
+  }
+}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Warehouse Tote Lookup Assistant</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <header>
+    <h1>Tote Lookup</h1>
+    <p class="subtitle">Salt okunur görüntüleme aracı - envanterde değişiklik yapmaz.</p>
+  </header>
+
+  <form id="search-form">
+    <input
+      id="tote-input"
+      type="text"
+      placeholder="Tote / TOT numarası girin"
+      autocomplete="off"
+      required
+    />
+    <button id="search-button" type="submit">Ara</button>
+    <button id="retry-button" type="button" hidden>Yeniden Dene</button>
+  </form>
+
+  <section id="source-status" aria-live="polite"></section>
+
+  <div id="loading" hidden>Aranıyor...</div>
+
+  <section id="filter-bar" hidden>
+    <input
+      id="filter-input"
+      type="text"
+      placeholder="ASIN, SKU, Owner, DropZone veya Expiration Date'e göre filtrele"
+    />
+  </section>
+
+  <div id="results-wrapper" hidden>
+    <table id="results-table">
+      <thead id="results-head"></thead>
+      <tbody id="results-body"></tbody>
+    </table>
+  </div>
+
+  <div id="toast" role="status" hidden></div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
