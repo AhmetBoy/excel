@@ -141,6 +141,16 @@ function setLoading(isLoading) {
   toteInput.disabled = isLoading;
 }
 
+// Readies the input for the next scan: clears it and puts the cursor back,
+// so a barcode scanner can fire the next tote without any mouse interaction.
+function prepareForNextScan() {
+  toteInput.value = '';
+  toteInput.placeholder = lastToteNumber
+    ? `Son aranan: ${lastToteNumber} — yeni tote okutun`
+    : 'Tote / TOT numarası girin';
+  toteInput.focus();
+}
+
 function applyFilterAndRender() {
   const filtered = filterRows(lastRows, filterInput.value);
   renderRows(resultsBodyEl, dedupeDropZoneDisplay(filtered), currentColumns);
@@ -174,6 +184,8 @@ async function runLookup(toteNumber) {
     retryButton.hidden = false;
   } finally {
     setLoading(false);
+    // Disabling the input during loading drops its focus; restore it here.
+    prepareForNextScan();
   }
 }
 
@@ -191,9 +203,18 @@ retryButton.addEventListener('click', () => {
 
 filterInput.addEventListener('input', applyFilterAndRender);
 
+// When the panel regains focus (e.g. after clicking into a web page), jump back
+// to the tote input unless the user is deliberately typing in the filter box.
+window.addEventListener('focus', () => {
+  if (document.activeElement !== filterInput && !toteInput.disabled) {
+    toteInput.focus();
+  }
+});
+
 async function init() {
   await loadColumnOrder();
   buildTableHead();
+  toteInput.focus();
 }
 
 init();
