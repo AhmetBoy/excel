@@ -3,6 +3,8 @@ import { buildResultRows } from '../shared/matchingService.js';
 import { fetchInventoryHtml } from './services/inventoryService.js';
 import { fetchPandashRaw } from './services/pandashService.js';
 import { fetchQtDatelotForTote } from './services/qtService.js';
+import { fetchAtlasReportRaw } from './services/atlasService.js';
+import { parseAtlasReport } from '../shared/parsers/atlasReportParser.js';
 
 // Without this, clicking the toolbar icon does nothing because there is
 // no action.default_popup - the side panel must be opened explicitly.
@@ -124,6 +126,70 @@ async function lookupTote(toteNumber) {
     },
   };
 }
+
+/**
+ * Fetches per-associate stow counts (Atlas "Opportunities") for one time range.
+ *
+ * @param {{ warehouseId: string, queryHash: string, startTime: number, endTime: number }} params
+ * @returns {Promise<{ status: string, rows: object[], message?: string }>}
+ */
+async function fetchStowReportRange(params) {
+  const response = await fetchAtlasReportRaw(params);
+  if (response.status !== 'ok') {
+    return { status: response.status, rows: [], message: response.message };
+  }
+
+  const parsed = parseAtlasReport(response.text, { warehouseId: params.warehouseId });
+  if (!parsed.valid) return { status: 'unexpected_response', rows: [] };
+  if (parsed.errorMessage) {
+    return { status: 'graphql_error', rows: parsed.rows, message: parsed.errorMessage };
+  }
+  return { status: 'ok', rows: parsed.rows };
+}
+
+// Atlas returns one aggregate per request (timeRanges are summed, not
+// broken down), so an hourly report needs one request per hour. Capped
+// so a long range doesn't fire dozens of requests at once.
+const MAX_PARALLEL_ATLAS_REQUESTS = 4;
+
+/**
+ * @param {{ warehouseId: string, queryHash: string, timeRanges: Array<{startTime: number, endTime: number}> }} params
+ * @returns {Promise<{ status: string, slots: Array<{ status: string, rows: object[] }>, message?: string }>}
+ */
+async function fetchStowReport({ warehouseId, queryHash, timeRanges }) {
+  const slots = new Array(timeRanges.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < timeRanges.length) {
+      const index = next++;
+      slots[index] = await fetchStowReportRange({ warehouseId, queryHash, ...timeRanges[index] });
+    }
+  };
+  await Promise.all(Array.from({ length: MAX_PARALLEL_ATLAS_REQUESTS }, worker));
+
+  const failed = slots.filter((s) => s.status !== 'ok');
+  if (failed.length === 0) {
+    const anyRows = slots.some((s) => s.rows.length > 0);
+    return { status: anyRows ? 'ok' : 'no_data', slots };
+  }
+  return {
+    status: failed.length === slots.length ? failed[0].status : 'partial_failure',
+    message: failed[0].message,
+    slots,
+  };
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'FETCH_STOW_REPORT') return undefined;
+
+  fetchStowReport(message.params)
+    .then(sendResponse)
+    .catch((error) =>
+      sendResponse({ status: 'error', slots: [], message: String(error?.message ?? error) })
+    );
+
+  return true;
+});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'LOOKUP_TOTE') return undefined;

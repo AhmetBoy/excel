@@ -204,8 +204,11 @@ retryButton.addEventListener('click', () => {
 filterInput.addEventListener('input', applyFilterAndRender);
 
 // When the panel regains focus (e.g. after clicking into a web page), jump back
-// to the tote input unless the user is deliberately typing in the filter box.
+// to the tote input unless the user is deliberately typing in the filter box
+// or is on another tab (e.g. Rapor).
+const lookupPanelEl = document.getElementById('tab-lookup');
 window.addEventListener('focus', () => {
+  if (lookupPanelEl.hidden) return;
   if (document.activeElement !== filterInput && !toteInput.disabled) {
     toteInput.focus();
   }

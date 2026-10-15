@@ -29,6 +29,9 @@ const SOURCE_STATUS_LABELS = {
   request_failed: 'İstek başarısız',
   network_error: 'İstek başarısız',
   error: 'İstek başarısız',
+  unexpected_response: 'Beklenmeyen yanıt (oturum açık mı?)',
+  graphql_error: 'Atlas hata döndürdü',
+  config_missing: 'Atlas sorgu hash değeri tanımlı değil',
 };
 
 /**

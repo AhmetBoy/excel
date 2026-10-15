@@ -11,40 +11,106 @@
     <p class="subtitle">Salt okunur görüntüleme aracı - envanterde değişiklik yapmaz.</p>
   </header>
 
-  <form id="search-form">
-    <input
-      id="tote-input"
-      type="text"
-      placeholder="Tote / TOT numarası girin"
-      autocomplete="off"
-      autofocus
-      required
-    />
-    <button id="search-button" type="submit">Ara</button>
-    <button id="retry-button" type="button" hidden>Yeniden Dene</button>
-  </form>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" type="button" role="tab" data-tab="lookup">Tote Lookup</button>
+    <button class="tab" type="button" role="tab" data-tab="report">Rapor</button>
+  </nav>
 
-  <section id="source-status" aria-live="polite"></section>
+  <section id="tab-lookup" class="tab-panel">
+    <form id="search-form">
+      <input
+        id="tote-input"
+        type="text"
+        placeholder="Tote / TOT numarası girin"
+        autocomplete="off"
+        autofocus
+        required
+      />
+      <button id="search-button" type="submit">Ara</button>
+      <button id="retry-button" type="button" hidden>Yeniden Dene</button>
+    </form>
 
-  <div id="loading" hidden>Aranıyor...</div>
+    <section id="source-status" aria-live="polite"></section>
 
-  <section id="filter-bar" hidden>
-    <input
-      id="filter-input"
-      type="text"
-      placeholder="ASIN, SKU, Owner, DropZone veya Expiration Date'e göre filtrele"
-    />
+    <div id="loading" hidden>Aranıyor...</div>
+
+    <section id="filter-bar" hidden>
+      <input
+        id="filter-input"
+        type="text"
+        placeholder="ASIN, SKU, Owner, DropZone veya Expiration Date'e göre filtrele"
+      />
+    </section>
+
+    <div id="results-wrapper" hidden>
+      <table id="results-table">
+        <thead id="results-head"></thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
   </section>
 
-  <div id="results-wrapper" hidden>
-    <table id="results-table">
-      <thead id="results-head"></thead>
-      <tbody id="results-body"></tbody>
-    </table>
-  </div>
+  <section id="tab-report" class="tab-panel" hidden>
+    <form id="report-form">
+      <div class="report-grid">
+        <label>Başlangıç
+          <span class="datetime">
+            <input id="report-start-date" type="date" required />
+            <input id="report-start-time" type="time" required />
+          </span>
+        </label>
+        <label>Bitiş
+          <span class="datetime">
+            <input id="report-end-date" type="date" required />
+            <input id="report-end-time" type="time" required />
+          </span>
+        </label>
+        <label>Warehouse
+          <input id="report-warehouse" type="text" required />
+        </label>
+        <label class="checkbox-label">
+          <input id="report-hourly" type="checkbox" />
+          Saatlik verileri getir
+        </label>
+      </div>
+      <details id="report-users">
+        <summary id="report-users-summary">Kullanıcı listesi</summary>
+        <textarea
+          id="report-users-input"
+          rows="5"
+          spellcheck="false"
+          placeholder="Her satıra bir kullanıcı adı (boş bırakılırsa herkes gösterilir)"
+        ></textarea>
+      </details>
+      <div id="report-settings" hidden>
+        <label>Sorgu hash (sha256Hash)
+          <input id="report-query-hash" type="text" autocomplete="off" spellcheck="false" />
+        </label>
+      </div>
+      <button id="report-button" type="submit">Raporu Getir</button>
+    </form>
+
+    <section id="report-status" aria-live="polite"></section>
+
+    <div id="report-loading" hidden>Rapor getiriliyor...</div>
+
+    <section id="report-filter-bar" hidden>
+      <input id="report-filter-input" type="text" placeholder="Kullanıcı veya manager'a göre filtrele" />
+      <button id="report-export-button" type="button">Excel'e Aktar</button>
+    </section>
+
+    <div id="report-wrapper" hidden>
+      <table id="report-table">
+        <thead id="report-head"></thead>
+        <tbody id="report-body"></tbody>
+        <tfoot id="report-foot"></tfoot>
+      </table>
+    </div>
+  </section>
 
   <div id="toast" role="status" hidden></div>
 
   <script type="module" src="sidepanel.js"></script>
+  <script type="module" src="reportTab.js"></script>
 </body>
 </html>
