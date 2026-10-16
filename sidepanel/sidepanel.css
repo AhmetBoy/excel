@@ -205,6 +205,51 @@ button:hover {
   background: #e8e8e8;
 }
 
+#last-tote-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: -4px 0 10px;
+  font-size: 12px;
+  color: #444;
+}
+
+#last-tote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#last-tote[hidden],
+#copy-feedback[hidden] {
+  display: none;
+}
+
+#last-tote-value {
+  font-family: monospace;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 5px;
+}
+
+#copy-feedback {
+  color: #1e8e3e;
+  font-weight: 600;
+}
+
+#last-tote-bar .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 #source-status {
   display: flex;
   gap: 8px;
@@ -233,6 +278,87 @@ button:hover {
 .status-badge.error {
   background: #fde4e4;
   border-color: #e08f8f;
+}
+
+#tote-verdict:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.verdict {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border-left: 5px solid;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.verdict-ready {
+  background: #d4f5d4;
+  border-color: #1e8e3e;
+  color: #11631a;
+  font-size: 16px;
+}
+
+.verdict-action {
+  background: #fde0e0;
+  border-color: #c0392b;
+  color: #8e1c12;
+}
+
+.verdict-warn {
+  background: #fff3d0;
+  border-color: #d39e00;
+  color: #7a5a00;
+}
+
+.verdict-move {
+  background: #ffe8d1;
+  border-color: #e8710a;
+  color: #8a3d00;
+}
+
+.verdict-info {
+  background: #e3effd;
+  border-color: #1a73e8;
+  color: #0b4a9e;
+}
+
+.verdict-note {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.verdict-counts {
+  font-size: 12px;
+  color: #444;
+}
+
+td.cell-action {
+  background: #fde0e0;
+  color: #8e1c12;
+  font-weight: 700;
+}
+
+td.cell-move {
+  background: #ffe8d1;
+  color: #8a3d00;
+  font-weight: 700;
+}
+
+td.cell-info {
+  background: #e3effd;
+  color: #0b4a9e;
+  font-weight: 600;
+}
+
+td.cell-warn {
+  background: #fff3d0;
+  color: #7a5a00;
+  font-weight: 600;
 }
 
 #loading {

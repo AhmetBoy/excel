@@ -87,7 +87,7 @@ export function dedupeDropZoneDisplay(rows) {
   return rows.map((row) => {
     if (!row.fnSku) return row;
     if (seenFnSku.has(row.fnSku)) {
-      return { ...row, dropZone: null };
+      return { ...row, dropZone: null, dropZoneHidden: true };
     }
     seenFnSku.add(row.fnSku);
     return row;
@@ -144,8 +144,11 @@ export function filterRows(rows, query) {
  * @param {HTMLTableSectionElement} tbody
  * @param {object[]} rows
  * @param {{key: string, label: string}[]} [columns]
+ * @param {(row: object, columnKey: string) => string|null} [getCellClass]
+ *   optional extra CSS class per cell (e.g. to highlight a value that
+ *   triggered a stow-readiness rule)
  */
-export function renderRows(tbody, rows, columns = COLUMNS) {
+export function renderRows(tbody, rows, columns = COLUMNS, getCellClass = null) {
   tbody.replaceChildren();
 
   if (rows.length === 0) {
@@ -165,6 +168,8 @@ export function renderRows(tbody, rows, columns = COLUMNS) {
       const td = document.createElement('td');
       td.textContent =
         column.key === 'dataStatus' ? describeDataStatus(row) : displayOrMissing(row[column.key]);
+      const cellClass = getCellClass?.(row, column.key);
+      if (cellClass) td.className = cellClass;
       tr.appendChild(td);
     }
     tbody.appendChild(tr);

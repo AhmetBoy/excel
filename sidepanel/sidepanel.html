@@ -30,7 +30,23 @@
       <button id="retry-button" type="button" hidden>Yeniden Dene</button>
     </form>
 
+    <div id="last-tote-bar">
+      <span id="last-tote" hidden>
+        Aranan tote: <strong id="last-tote-value"></strong>
+        <button id="copy-tote-button" class="icon-button" type="button" title="Tote numarasını kopyala" aria-label="Tote numarasını kopyala">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <span id="copy-feedback" hidden>Kopyalandı</span>
+      </span>
+      <label class="checkbox-label" title="Her okutmada tote numarasını panoya kopyalar">
+        <input id="auto-copy-input" type="checkbox" checked />
+        Okutulanı otomatik kopyala
+      </label>
+    </div>
+
     <section id="source-status" aria-live="polite"></section>
+
+    <section id="tote-verdict" aria-live="polite" hidden></section>
 
     <div id="loading" hidden>Aranıyor...</div>
 
