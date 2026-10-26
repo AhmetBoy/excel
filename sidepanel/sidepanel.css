@@ -87,7 +87,8 @@ header h1 {
   color: #555;
 }
 
-#report-users summary {
+#report-users summary,
+#report-settings summary {
   cursor: pointer;
   margin-bottom: 4px;
 }

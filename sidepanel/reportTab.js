@@ -88,8 +88,8 @@ async function loadSettings() {
   hourlyCheckbox.checked = settings.hourly;
   usersInput.value = settings.users;
   queryHashInput.value = settings.queryHash;
-  // The hash only needs attention when it's missing or Atlas rejects it.
-  settingsEl.hidden = Boolean(settings.queryHash);
+  // Always editable; only expanded when the hash is missing or Atlas rejects it.
+  settingsEl.open = !settings.queryHash;
   updateUsersSummary();
 }
 
@@ -216,7 +216,7 @@ form.addEventListener('submit', async (event) => {
   const queryHash = queryHashInput.value.trim();
   saveSettings();
   if (!queryHash) {
-    settingsEl.hidden = false;
+    settingsEl.open = true;
     showStatus('config_missing');
     queryHashInput.focus();
     return;
@@ -235,9 +235,7 @@ form.addEventListener('submit', async (event) => {
 
     // A stale hash (Atlas shipped a new query version) - surface the setting again.
     if (response.status === 'config_missing' || /PersistedQueryNotFound/i.test(response.message ?? '')) {
-      settingsEl.hidden = false;
-    } else if (response.status === 'ok') {
-      settingsEl.hidden = true;
+      settingsEl.open = true;
     }
 
     const slotRows = (response.slots ?? []).map((s) => s?.rows ?? []);
@@ -301,5 +299,6 @@ exportButton.addEventListener('click', exportToXlsx);
 usersInput.addEventListener('input', updateUsersSummary);
 usersInput.addEventListener('change', saveSettings);
 hourlyCheckbox.addEventListener('change', saveSettings);
+queryHashInput.addEventListener('change', saveSettings);
 
 loadSettings();
