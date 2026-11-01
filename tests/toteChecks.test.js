@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellHighlightClass, evaluateTote, isMoveNeeded } from '../shared/toteChecks.js';
+import { cellHighlightClass, evaluateTote, dropZoneColumnClass, isMoveNeeded } from '../shared/toteChecks.js';
 
 const readyRow = (overrides = {}) => ({
   asin: 'B0A',
@@ -152,6 +152,49 @@ describe('cellHighlightClass', () => {
     expect(
       cellHighlightClass(readyRow({ dropZone: null, dropZoneHidden: true }), 'dropZone', { moveNeeded: false })
     ).toBeNull();
+  });
+});
+
+describe('DropZone colors', () => {
+  it('colors the whole column green when every product is NO_RESTRICTION', () => {
+    const rows = [readyRow(), readyRow({ asin: 'B0B', fnSku: 'FNB' })];
+    const columnClass = dropZoneColumnClass(rows);
+    expect(columnClass).toBe('cell-ok');
+    const ctx = { moveNeeded: isMoveNeeded(rows), columnClass };
+    expect(cellHighlightClass(rows[0], 'dropZone', ctx)).toBe('cell-ok');
+    expect(cellHighlightClass({ ...rows[1], dropZone: null, dropZoneHidden: true }, 'dropZone', ctx)).toBe('cell-ok');
+  });
+
+  it('colors the whole column yellow when every product is MISCH_HEALTH or every one CORROSIVE', () => {
+    expect(dropZoneColumnClass([readyRow({ dropZone: 'MISCH_HEALTH' }), readyRow({ dropZone: 'misch_health' })])).toBe(
+      'cell-caution'
+    );
+    expect(dropZoneColumnClass([readyRow({ dropZone: 'CORROSIVE' })])).toBe('cell-caution');
+  });
+
+  it('colors the whole column pink when every product is a flammable / aerosol DropZone', () => {
+    expect(dropZoneColumnClass([readyRow({ dropZone: 'FLAMMABLES' }), readyRow({ dropZone: 'FLAMMABLES' })])).toBe(
+      'cell-hazmat'
+    );
+    // a mix of hazmat DropZones is still all pink
+    expect(dropZoneColumnClass([readyRow({ dropZone: 'AEROSOLS' }), readyRow({ dropZone: 'FLAM_AEROSOLS' })])).toBe(
+      'cell-hazmat'
+    );
+  });
+
+  it('leaves mixed or empty DropZones to the per-cell rules', () => {
+    expect(dropZoneColumnClass([readyRow(), readyRow({ dropZone: 'FLAMMABLES' })])).toBeNull();
+    expect(dropZoneColumnClass([readyRow({ dropZone: 'MISCH_HEALTH' }), readyRow({ dropZone: 'CORROSIVE' })])).toBeNull();
+    expect(dropZoneColumnClass([readyRow(), readyRow({ dropZone: null })])).toBeNull();
+    expect(dropZoneColumnClass([])).toBeNull();
+  });
+
+  it('colors flammable / aerosol DropZones pink, even when a Move is needed', () => {
+    for (const dropZone of ['FLAM_AEROSOLS', 'AEROSOLS', 'flammables']) {
+      expect(cellHighlightClass(readyRow({ dropZone }), 'dropZone', { moveNeeded: true })).toBe('cell-hazmat');
+    }
+    // the other DropZone of a mixed tote stays orange
+    expect(cellHighlightClass(readyRow(), 'dropZone', { moveNeeded: true })).toBe('cell-move');
   });
 });
 

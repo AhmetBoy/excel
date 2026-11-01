@@ -1,5 +1,8 @@
 const HOUR_SECONDS = 3600;
 
+// Shown in the İsim column when the user list gives no name for a login.
+export const UNKNOWN_NAME = 'Bilinmiyor';
+
 /**
  * Splits a range into consecutive one-hour slots. The last slot is
  * shorter if the range doesn't end on a whole hour (e.g. 15:00-17:30 ->
@@ -17,17 +20,34 @@ export function buildHourlySlots({ startTime, endTime }) {
 }
 
 /**
- * Parses a free-text list of logins (newline, comma, semicolon or space
- * separated). Case-insensitive, duplicates removed, input order kept.
+ * Parses the Rapor user list: one person per line (or comma/semicolon
+ * separated), either "login" or "Name login" - the last word is the login,
+ * anything before it is the display name ("Ahmet Yılmaz ahmet123" works).
+ * Logins are lowercased; duplicates are merged, keeping input order.
+ *
  * @param {string} text
- * @returns {string[]} lowercased logins
+ * @returns {Array<{ login: string, name: string|null }>}
+ */
+export function parseUserEntries(text) {
+  const byLogin = new Map();
+  for (const line of (text ?? '').split(/[\r\n,;]+/)) {
+    const words = line.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) continue;
+    const login = words.pop().toLowerCase();
+    const name = words.join(' ') || null;
+    const existing = byLogin.get(login);
+    if (!existing) byLogin.set(login, { login, name });
+    else if (!existing.name && name) existing.name = name;
+  }
+  return [...byLogin.values()];
+}
+
+/**
+ * @param {string} text
+ * @returns {string[]} lowercased logins from parseUserEntries()
  */
 export function parseUserList(text) {
-  const logins = (text ?? '')
-    .split(/[\s,;]+/)
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  return [...new Set(logins)];
+  return parseUserEntries(text).map((entry) => entry.login);
 }
 
 function maxOf(values) {
@@ -46,9 +66,12 @@ function maxOf(values) {
  * share the highlight.
  *
  * @param {Array<Array<{login: string, managerId: string|null, opportunities: number}>>} slotRows - one row list per slot
- * @param {{ users?: string[] }} [options]
+ * `names` maps a lowercased login to a display name (row.name; null when
+ * unknown).
+ *
+ * @param {{ users?: string[], names?: Record<string, string|null> }} [options]
  */
-export function buildStowTable(slotRows, { users = [] } = {}) {
+export function buildStowTable(slotRows, { users = [], names = {} } = {}) {
   const slotCount = slotRows.length;
   const byLogin = new Map();
 
@@ -56,7 +79,7 @@ export function buildStowTable(slotRows, { users = [] } = {}) {
     const key = login.toLowerCase();
     let entry = byLogin.get(key);
     if (!entry) {
-      entry = { login, managerId, values: new Array(slotCount).fill(0), total: 0 };
+      entry = { login, name: names[key] ?? null, managerId, values: new Array(slotCount).fill(0), total: 0 };
       byLogin.set(key, entry);
     } else if (!entry.managerId && managerId) {
       entry.managerId = managerId;
@@ -107,7 +130,7 @@ export function buildStowSheetRows({ table, rows, slots, hourly, title }, styles
   const header = (v) => ({ v, s: styles.HEADER });
   const footer = (v) => ({ v, s: styles.FOOTER });
 
-  const headerRow = [header('#'), header('Kullanıcı')];
+  const headerRow = [header('#'), header('Kullanıcı'), header('İsim')];
   if (hourly) {
     headerRow.push(...slots.map((slot) => header(formatSlotLabel(slot))), header('Toplam'));
   } else {
@@ -115,7 +138,7 @@ export function buildStowSheetRows({ table, rows, slots, hourly, title }, styles
   }
 
   const bodyRows = rows.map((row, index) => {
-    const cells = [{ v: index + 1 }, { v: row.login }];
+    const cells = [{ v: index + 1 }, { v: row.login }, { v: row.name ?? UNKNOWN_NAME }];
     if (hourly) {
       row.values.forEach((value, i) => {
         cells.push(isTop(value, table.columnMax[i]) ? { v: value, s: styles.TOP } : { v: value });
@@ -127,7 +150,7 @@ export function buildStowSheetRows({ table, rows, slots, hourly, title }, styles
     return cells;
   });
 
-  const footerRow = [footer(null), footer(`Toplam (${rows.length} kişi)`)];
+  const footerRow = [footer(null), footer(`Toplam (${rows.length} kişi)`), footer(null)];
   if (hourly) {
     slots.forEach((_, i) => footerRow.push(footer(rows.reduce((sum, r) => sum + r.values[i], 0))));
   } else {

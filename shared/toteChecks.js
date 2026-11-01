@@ -38,6 +38,31 @@ export function effectiveDropZone(dropZone) {
   return EMPTY_DROPZONE_VALUES.has(value) ? NOT_PERMITTED : value;
 }
 
+// Flammable / aerosol DropZones, highlighted pink so they stand out.
+const HAZMAT_DROPZONES = new Set(['FLAM_AEROSOLS', 'AEROSOLS', 'FLAMMABLES']);
+
+// Whole-column color when every product of the tote has the same DropZone.
+const UNIFORM_DROPZONE_CLASSES = {
+  NO_RESTRICTION: 'cell-ok',
+  MISCH_HEALTH: 'cell-caution',
+  MISC_HEALTH: 'cell-caution',
+  CORROSIVE: 'cell-caution',
+};
+
+/**
+ * CSS class for the whole DropZone column: green when every product is
+ * NO_RESTRICTION, yellow when every product is MISCH_HEALTH (or every one
+ * CORROSIVE), pink when every product is a flammable / aerosol DropZone.
+ * null for mixed or other DropZones.
+ * @param {object[]} rows
+ * @returns {string|null}
+ */
+export function dropZoneColumnClass(rows) {
+  const zones = distinct(inventoryRowsOf(rows ?? []).map((row) => effectiveDropZone(row.dropZone)));
+  if (zones.length > 0 && zones.every((zone) => HAZMAT_DROPZONES.has(zone))) return 'cell-hazmat';
+  return zones.length === 1 ? (UNIFORM_DROPZONE_CLASSES[zones[0]] ?? null) : null;
+}
+
 function permittedDropZones(rows) {
   return distinct(
     rows.map((row) => effectiveDropZone(row.dropZone)).filter((zone) => zone !== NOT_PERMITTED)
@@ -77,14 +102,14 @@ function findToteScanFnSkus(rows) {
     .map(([fnSku]) => fnSku);
 }
 
-function sumQuantity(rows) {
+export function sumQuantity(rows) {
   return rows.reduce((total, row) => {
     const quantity = Number.parseInt(row.quantity, 10);
     return Number.isFinite(quantity) ? total + quantity : total;
   }, 0);
 }
 
-function countVariety(rows) {
+export function countVariety(rows) {
   return distinct(rows.map((row) => upper(row.fnSku) || upper(row.asin)).filter(Boolean)).length;
 }
 
@@ -199,10 +224,10 @@ export function evaluateTote(rows, { pandashOk = true } = {}) {
  * rules above, so the offending value stands out in the row too.
  * @param {object} row
  * @param {string} columnKey
- * @param {{ moveNeeded: boolean }} context
+ * @param {{ moveNeeded: boolean, columnClass?: string|null }} context - columnClass from dropZoneColumnClass()
  * @returns {string|null}
  */
-export function cellHighlightClass(row, columnKey, { moveNeeded }) {
+export function cellHighlightClass(row, columnKey, { moveNeeded, columnClass = null }) {
   if (columnKey === 'consumer') {
     const consumer = upper(row.consumer);
     if (consumer === EDIT_CONSUMER) return 'cell-action';
@@ -215,8 +240,13 @@ export function cellHighlightClass(row, columnKey, { moveNeeded }) {
   }
   // Rows whose DropZone is hidden as a duplicate (dedupeDropZoneDisplay)
   // carry the same value as the first row of that FNSku; don't re-flag them.
-  if (columnKey === 'dropZone' && !row.dropZoneHidden) {
-    if (effectiveDropZone(row.dropZone) === NOT_PERMITTED) return 'cell-move';
+  if (columnKey === 'dropZone') {
+    // A tote with one DropZone throughout may color the whole column.
+    if (columnClass) return columnClass;
+    if (row.dropZoneHidden) return null;
+    const dropZone = effectiveDropZone(row.dropZone);
+    if (dropZone === NOT_PERMITTED) return 'cell-move';
+    if (HAZMAT_DROPZONES.has(dropZone)) return 'cell-hazmat';
     if (moveNeeded) return 'cell-move';
   }
   return null;

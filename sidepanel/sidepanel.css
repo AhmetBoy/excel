@@ -350,6 +350,24 @@ td.cell-move {
   font-weight: 700;
 }
 
+td.cell-ok {
+  background: #d9f2dc;
+  color: #1d6b2c;
+  font-weight: 600;
+}
+
+td.cell-caution {
+  background: #fff1a8;
+  color: #6b5600;
+  font-weight: 600;
+}
+
+td.cell-hazmat {
+  background: #fbd3ea;
+  color: #8a1257;
+  font-weight: 700;
+}
+
 td.cell-info {
   background: #e3effd;
   color: #0b4a9e;
@@ -420,4 +438,144 @@ th.dragging {
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   z-index: 100;
+}
+
+/* Associate lookup (pc99<login>) and Barkod tab */
+#user-results:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.user-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-location,
+.user-count {
+  color: #555;
+}
+
+.barcode-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.container-card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.card-type {
+  color: #666;
+  font-size: 11px;
+}
+
+.small-button {
+  padding: 2px 8px;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.barcode {
+  margin: 0;
+  background: #fff;
+  overflow-x: auto;
+}
+
+.barcode svg {
+  display: block;
+}
+
+.barcode figcaption {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding-left: 20px;
+}
+
+.barcode-error {
+  color: #c0392b;
+}
+
+.container-card details {
+  margin-top: 6px;
+}
+
+.container-card summary {
+  cursor: pointer;
+  color: #555;
+}
+
+.inventory-mini th {
+  cursor: default;
+}
+
+.inventory-mini td {
+  white-space: normal;
+}
+
+#barcode-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+#barcode-input {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+#barcode-button {
+  align-self: flex-start;
+}
+
+/* Stow errors (PROBLEM_SOLVE) per container */
+.stow-errors {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.stow-errors.has-errors {
+  border-left: 3px solid #c0392b;
+  background: #fdf0ee;
+  padding: 4px 8px;
+}
+
+.stow-errors-title {
+  font-weight: 600;
+  color: #c0392b;
+  margin-bottom: 2px;
+}
+
+.stow-pick {
+  font-weight: 600;
+}
+
+.stow-detail,
+.stow-ok {
+  color: #666;
+}
+
+.stow-system-qty {
+  margin: 0 0 4px 8px;
+  font-weight: 600;
+}
+
+#report-table td.unknown-name {
+  color: #999;
 }

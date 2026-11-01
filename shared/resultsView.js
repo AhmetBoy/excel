@@ -4,6 +4,7 @@ export const COLUMNS = [
   { key: 'dropZone', label: 'DropZone' },
   { key: 'consumer', label: 'Consumer' },
   { key: 'disposition', label: 'Disposition' },
+  { key: 'binDescription', label: 'Bin Description' },
   { key: 'container', label: 'Container' },
   { key: 'asin', label: 'ASIN' },
   { key: 'fnSku', label: 'FNSku' },
@@ -115,7 +116,7 @@ export function reorderColumns(storedKeyOrder) {
   return [...ordered, ...remaining];
 }
 
-const FILTERABLE_FIELDS = ['asin', 'fnSku', 'fcSku', 'owner', 'dropZone', 'expirationDate'];
+const FILTERABLE_FIELDS = ['asin', 'fnSku', 'fcSku', 'owner', 'dropZone', 'binDescription', 'expirationDate'];
 
 /**
  * Filters rows by a free-text query matched against ASIN, SKU, Owner,

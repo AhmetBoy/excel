@@ -6,7 +6,15 @@ import {
   renderRows,
   reorderColumns,
 } from '../shared/resultsView.js';
-import { cellHighlightClass, evaluateTote, hasNotPermitted, isMoveNeeded } from '../shared/toteChecks.js';
+import {
+  cellHighlightClass,
+  dropZoneColumnClass,
+  evaluateTote,
+  hasNotPermitted,
+  isMoveNeeded,
+} from '../shared/toteChecks.js';
+import { classifyLookupInput } from '../shared/lookupInput.js';
+import { renderUserResults } from './userResults.js';
 
 const form = document.getElementById('search-form');
 const toteInput = document.getElementById('tote-input');
@@ -26,6 +34,7 @@ const lastToteValueEl = document.getElementById('last-tote-value');
 const copyToteButton = document.getElementById('copy-tote-button');
 const copyFeedbackEl = document.getElementById('copy-feedback');
 const autoCopyInput = document.getElementById('auto-copy-input');
+const userResultsEl = document.getElementById('user-results');
 
 const COLUMN_ORDER_STORAGE_KEY = 'toteLookupColumnOrder';
 const AUTO_COPY_STORAGE_KEY = 'toteLookupAutoCopy';
@@ -159,7 +168,7 @@ function badgeClass(status) {
 }
 
 function renderSourceStatus(sourceStatus) {
-  const labels = { inventory: 'Inventory', pandash: 'Pandash', qt: 'QT' };
+  const labels = { inventory: 'Inventory', pandash: 'Pandash', sideline: 'Sideline', qt: 'QT' };
   sourceStatusEl.replaceChildren(
     ...Object.entries(sourceStatus).map(([key, status]) => {
       const badge = document.createElement('span');
@@ -182,7 +191,7 @@ function prepareForNextScan() {
   toteInput.value = '';
   toteInput.placeholder = lastToteNumber
     ? `Son aranan: ${lastToteNumber} — yeni tote okutun`
-    : 'Tote / TOT numarası girin';
+    : 'Tote numarası veya kullanıcı adı girin';
   toteInput.focus();
 }
 
@@ -227,7 +236,10 @@ function renderToteVerdict(rows, options) {
 
 function applyFilterAndRender() {
   const filtered = filterRows(lastRows, filterInput.value);
-  const highlightContext = { moveNeeded: isMoveNeeded(lastRows) };
+  const highlightContext = {
+    moveNeeded: isMoveNeeded(lastRows),
+    columnClass: dropZoneColumnClass(lastRows),
+  };
   renderRows(resultsBodyEl, dedupeDropZoneDisplay(filtered), currentColumns, (row, key) =>
     cellHighlightClass(row, key, highlightContext)
   );
@@ -236,6 +248,7 @@ function applyFilterAndRender() {
 async function runLookup(toteNumber) {
   setLoading(true);
   retryButton.hidden = true;
+  userResultsEl.hidden = true;
 
   try {
     const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_TOTE', toteNumber });
@@ -259,11 +272,7 @@ async function runLookup(toteNumber) {
     }
   } catch (error) {
     renderToteVerdict([]);
-    sourceStatusEl.replaceChildren();
-    const badge = document.createElement('span');
-    badge.className = 'status-badge error';
-    badge.textContent = `Hata: ${error?.message ?? error}`;
-    sourceStatusEl.appendChild(badge);
+    renderErrorBadge(error?.message ?? error);
     retryButton.hidden = false;
   } finally {
     setLoading(false);
@@ -272,18 +281,73 @@ async function runLookup(toteNumber) {
   }
 }
 
+function hideToteResults() {
+  renderToteVerdict([]);
+  filterBarEl.hidden = true;
+  resultsWrapperEl.hidden = true;
+}
+
+function renderErrorBadge(message) {
+  const badge = document.createElement('span');
+  badge.className = 'status-badge error';
+  badge.textContent = `Hata: ${message}`;
+  sourceStatusEl.replaceChildren(badge);
+}
+
+// Opens one of the associate's containers in the normal tote view.
+function openContainer(scannableId) {
+  lastToteNumber = scannableId;
+  showLastTote(scannableId);
+  runLookup(scannableId);
+}
+
+/**
+ * Associate lookup (letters-only input): lists the totes/csX on
+ * pc99<login> with a barcode each, plus their Inventory contents.
+ */
+async function runUserLookup({ login, query }) {
+  setLoading(true);
+  retryButton.hidden = true;
+  hideToteResults();
+  userResultsEl.hidden = true;
+
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_USER', login, query });
+    if (!response) throw new Error('Arka plan betiğinden yanıt alınamadı.');
+    if (response.status === 'error') throw new Error(response.message ?? 'İstek başarısız');
+
+    renderSourceStatus({ 'FC Research': response.status });
+    renderUserResults(userResultsEl, response, openContainer);
+    userResultsEl.hidden = false;
+  } catch (error) {
+    renderErrorBadge(error?.message ?? error);
+    retryButton.hidden = false;
+  } finally {
+    setLoading(false);
+    prepareForNextScan();
+  }
+}
+
+function runSearch(value) {
+  const input = classifyLookupInput(value);
+  if (!input) return;
+  lastToteNumber = input.query;
+  showLastTote(input.query);
+  if (input.kind === 'user') {
+    runUserLookup(input);
+    return;
+  }
+  if (autoCopyInput.checked) copyToteNumber(input.query);
+  runLookup(input.query);
+}
+
 form.addEventListener('submit', (event) => {
   event.preventDefault();
-  const toteNumber = toteInput.value.trim();
-  if (!toteNumber) return;
-  lastToteNumber = toteNumber;
-  showLastTote(toteNumber);
-  if (autoCopyInput.checked) copyToteNumber(toteNumber);
-  runLookup(toteNumber);
+  runSearch(toteInput.value);
 });
 
 retryButton.addEventListener('click', () => {
-  if (lastToteNumber) runLookup(lastToteNumber);
+  if (lastToteNumber) runSearch(lastToteNumber);
 });
 
 filterInput.addEventListener('input', applyFilterAndRender);

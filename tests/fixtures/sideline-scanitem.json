@@ -1,0 +1,94 @@
+{
+    "@type": "ItemNotInContainerResponse",
+    "success": true,
+    "items": [
+        {
+            "scannableId": "B0GRHHB2NG",
+            "skuDetail": {
+                "fcSku": "B0GRHHB2NG",
+                "fnSku": "B0GRHHB2NG",
+                "asin": "B0GRHHB2NG",
+                "title": "Milka Biscoff Tablet Çikolata 90g",
+                "normalizedTitle": "Milka Biscoff Tablet Çikolata 90g",
+                "condition": "NewItem",
+                "transparencyStatus": null,
+                "weight": {
+                    "value": 0.09,
+                    "unit": "kilograms"
+                },
+                "expirationType": "PRINTED_ON_PRODUCT",
+                "dimensions": {
+                    "length": 18.4,
+                    "width": 7.5,
+                    "height": 0.9,
+                    "unit": "CM"
+                },
+                "itemDropzoneRecommendation": {
+                    "asin": "B0GRHHB2NG",
+                    "dropzone": "NO_RESTRICTION",
+                    "permissionLevel": "PERMITTED",
+                    "favorRAMessage": false,
+                    "complianceMessage": null,
+                    "hazmatMAQ": false
+                },
+                "imageUrls": [
+                    "http://ecx.images-amazon.com/images/I/41WrRS7H77L.jpg",
+                    "http://ecx.images-amazon.com/images/I/31L7GZeeI5L.jpg"
+                ],
+                "serialNumbers": [],
+                "lpn": null,
+                "datelotDetail": {
+                    "expirationPromptType": "EXPIRATION_DATE",
+                    "precalculatedExpirationDate": null,
+                    "shelfLife": 2.12544E10,
+                    "shelfLifePadTime": 3.888E9,
+                    "productExpirationType": "Expiration Date Required",
+                    "expirableItem": true,
+                    "userExpirationDateRequired": true,
+                    "expirationDateMissing": true,
+                    "sensitiveItem": false
+                },
+                "totalEaches": null,
+                "mlcDetail": {
+                    "lotCodes": [],
+                    "mlcClass": "UNKNOWN",
+                    "mlcMissing": false,
+                    "mlcCaptureRequired": false
+                },
+                "itemStickeringRestriction": "NONE",
+                "complianceRestrictions": null,
+                "serialNumberTrackingFormats": [],
+                "productUrl": "https://www.amazon.com.tr/dp/B0GRHHB2NG",
+                "expiryDate": null,
+                "hazmat": false,
+                "conveyable": true,
+                "mcfonly": false,
+                "sortable": true,
+                "expirationDateNeeded": false,
+                "set": false
+            },
+            "disposition": null,
+            "consumer": null,
+            "referenceId": null,
+            "binDescription": "Cekmece Yavas Grocery",
+            "phAttributes": null,
+            "quantity": 0
+        }
+    ],
+    "itemBarcode": {
+        "catalogMatchingSkus": null,
+        "skuMasterMatchingSkus": [
+            "B0GRHHB2NG"
+        ],
+        "matchingSkus": [
+            "B0GRHHB2NG"
+        ],
+        "value": "B0GRHHB2NG",
+        "gs1Context": {
+            "gtin": null,
+            "mlc": null,
+            "gs1Indicator": false
+        }
+    },
+    "allItemBarcodes": []
+}

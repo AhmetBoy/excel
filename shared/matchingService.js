@@ -2,10 +2,10 @@ function normalizeForCompare(str) {
   return (str ?? '').trim().toLowerCase();
 }
 
-function findPandashMatch(pandashMatches, asin) {
+function findMatchByAsin(matches, asin) {
   if (!asin) return null;
   return (
-    pandashMatches.find((m) => m.asin.toUpperCase() === asin.toUpperCase()) ??
+    matches.find((m) => m.asin.toUpperCase() === asin.toUpperCase()) ??
     null
   );
 }
@@ -53,18 +53,21 @@ function disambiguateByTitleAndQuantity(candidates, inventoryRecord) {
  * @param {object} input
  * @param {Array<object>} input.inventoryRecords - from parseInventoryHtml().records
  * @param {Array<object>} input.pandashMatches - from matchPandashResultsToAsins()
+ * @param {Array<object>} [input.sidelineMatches] - { asin, binDescription } per ASIN, from Sideline
  * @param {Array<object>} input.qtProducts - from parseQtDatelotHtml().products
  * @returns {{ rows: Array<object>, matchedQtCount: number, totalQtCount: number }}
  */
 export function buildResultRows({
   inventoryRecords = [],
   pandashMatches = [],
+  sidelineMatches = [],
   qtProducts = [],
 }) {
   const usedQtProducts = new Set();
 
   const inventoryRows = inventoryRecords.map((inv) => {
-    const pandash = findPandashMatch(pandashMatches, inv.asin);
+    const pandash = findMatchByAsin(pandashMatches, inv.asin);
+    const sideline = findMatchByAsin(sidelineMatches, inv.asin);
 
     let qtMatchStatus = 'no_fcsku';
     let qtProduct = null;
@@ -98,6 +101,7 @@ export function buildResultRows({
       consumer: inv.consumer,
       dropZone: pandash?.dropZone ?? null,
       pandashStatus: pandash?.status ?? 'not_requested',
+      binDescription: sideline?.binDescription ?? null,
       owner: qtProduct?.owner ?? null,
       expirationDate: qtProduct?.expirationDate ?? null,
       qtMatchStatus,
@@ -118,6 +122,7 @@ export function buildResultRows({
       consumer: null,
       dropZone: null,
       pandashStatus: 'not_requested',
+      binDescription: null,
       owner: p.owner,
       expirationDate: p.expirationDate,
       qtMatchStatus: 'qt_only_unmatched',

@@ -14,6 +14,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" type="button" role="tab" data-tab="lookup">Tote Lookup</button>
     <button class="tab" type="button" role="tab" data-tab="report">Rapor</button>
+    <button class="tab" type="button" role="tab" data-tab="barcode">Barkod</button>
   </nav>
 
   <section id="tab-lookup" class="tab-panel">
@@ -21,7 +22,7 @@
       <input
         id="tote-input"
         type="text"
-        placeholder="Tote / TOT numarası girin"
+        placeholder="Tote numarası veya kullanıcı adı girin"
         autocomplete="off"
         autofocus
         required
@@ -54,9 +55,11 @@
       <input
         id="filter-input"
         type="text"
-        placeholder="ASIN, SKU, Owner, DropZone veya Expiration Date'e göre filtrele"
+        placeholder="ASIN, SKU, Owner, DropZone, Bin Description veya Expiration Date'e göre filtrele"
       />
     </section>
+
+    <section id="user-results" aria-live="polite" hidden></section>
 
     <div id="results-wrapper" hidden>
       <table id="results-table">
@@ -95,7 +98,7 @@
           id="report-users-input"
           rows="5"
           spellcheck="false"
-          placeholder="Her satıra bir kullanıcı adı (boş bırakılırsa herkes gösterilir)"
+          placeholder="Her satıra bir kişi: İsim kullanıcıadı (ör. Ahmet ahmet123) ya da sadece kullanıcıadı. Boş bırakılırsa herkes gösterilir."
         ></textarea>
       </details>
       <details id="report-settings">
@@ -125,9 +128,23 @@
     </div>
   </section>
 
+  <section id="tab-barcode" class="tab-panel" hidden>
+    <form id="barcode-form">
+      <textarea
+        id="barcode-input"
+        rows="5"
+        spellcheck="false"
+        placeholder="Her satıra bir tote / csX numarası"
+      ></textarea>
+      <button id="barcode-button" type="submit">Barkod Oluştur</button>
+    </form>
+    <div id="barcode-output" class="barcode-grid"></div>
+  </section>
+
   <div id="toast" role="status" hidden></div>
 
   <script type="module" src="sidepanel.js"></script>
   <script type="module" src="reportTab.js"></script>
+  <script type="module" src="barcodeTab.js"></script>
 </body>
 </html>

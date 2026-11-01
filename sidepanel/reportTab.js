@@ -5,7 +5,9 @@ import {
   buildStowSheetRows,
   buildStowTable,
   formatSlotLabel,
+  parseUserEntries,
   parseUserList,
+  UNKNOWN_NAME,
 } from '../shared/stowReportTable.js';
 import { buildXlsx, XLSX_STYLE } from '../shared/xlsxWriter.js';
 
@@ -13,6 +15,7 @@ const tabButtons = document.querySelectorAll('.tab');
 const tabPanels = {
   lookup: document.getElementById('tab-lookup'),
   report: document.getElementById('tab-report'),
+  barcode: document.getElementById('tab-barcode'),
 };
 
 const form = document.getElementById('report-form');
@@ -125,7 +128,7 @@ const isTop = (value, max) => value > 0 && value === max;
 
 function renderHead({ slots, hourly }) {
   const tr = document.createElement('tr');
-  tr.append(el('th', '#'), el('th', 'Kullanıcı', 'sticky-col'));
+  tr.append(el('th', '#'), el('th', 'Kullanıcı', 'sticky-col'), el('th', 'İsim'));
   if (hourly) {
     for (const slot of slots) tr.append(el('th', formatSlotLabel(slot), 'num'));
     tr.append(el('th', 'Toplam', 'num total-col'));
@@ -139,14 +142,14 @@ function visibleRows() {
   const query = filterInput.value.trim().toLowerCase();
   const { rows } = lastReport.table;
   return query
-    ? rows.filter((r) => `${r.login} ${r.managerId ?? ''}`.toLowerCase().includes(query))
+    ? rows.filter((r) => `${r.login} ${r.name ?? ''} ${r.managerId ?? ''}`.toLowerCase().includes(query))
     : rows;
 }
 
 function renderReport() {
   if (!lastReport) return;
   const { table, slots, hourly } = lastReport;
-  const columnCount = hourly ? slots.length + 3 : 4;
+  const columnCount = hourly ? slots.length + 4 : 5;
   const rows = visibleRows();
 
   renderHead(lastReport);
@@ -161,7 +164,11 @@ function renderReport() {
     bodyEl.replaceChildren(
       ...rows.map((row, index) => {
         const tr = document.createElement('tr');
-        tr.append(el('td', String(index + 1)), el('td', row.login, 'sticky-col'));
+        tr.append(
+          el('td', String(index + 1)),
+          el('td', row.login, 'sticky-col'),
+          el('td', row.name ?? UNKNOWN_NAME, row.name ? null : 'unknown-name')
+        );
         if (hourly) {
           row.values.forEach((value, i) => {
             tr.append(el('td', fmt(value), `num${isTop(value, table.columnMax[i]) ? ' top' : ''}`));
@@ -179,7 +186,7 @@ function renderReport() {
 
   // Footer totals follow the filter so they always match the visible rows.
   const tr = document.createElement('tr');
-  tr.append(el('td', ''), el('td', `Toplam (${rows.length} kişi)`, 'sticky-col'));
+  tr.append(el('td', ''), el('td', `Toplam (${rows.length} kişi)`, 'sticky-col'), el('td', ''));
   if (hourly) {
     slots.forEach((_, i) => {
       tr.append(el('td', fmt(rows.reduce((sum, r) => sum + r.values[i], 0)), 'num'));
@@ -239,7 +246,11 @@ form.addEventListener('submit', async (event) => {
     }
 
     const slotRows = (response.slots ?? []).map((s) => s?.rows ?? []);
-    const table = buildStowTable(slotRows, { users: parseUserList(usersInput.value) });
+    const entries = parseUserEntries(usersInput.value);
+    const table = buildStowTable(slotRows, {
+      users: entries.map((e) => e.login),
+      names: Object.fromEntries(entries.map((e) => [e.login, e.name])),
+    });
     lastReport = { table, slots, hourly, warehouseId, range };
 
     showStatus(response.status, response.message);
@@ -270,14 +281,14 @@ function exportToXlsx() {
     `${formatDateTime(range.startTime)} / ${formatDateTime(range.endTime)}`;
   const rows = buildStowSheetRows({ ...lastReport, rows: visibleRows(), title }, XLSX_STYLE);
   const columnWidths = hourly
-    ? [5, 16, ...slots.map(() => 13), 10]
-    : [5, 16, 14, 20];
+    ? [5, 16, 18, ...slots.map(() => 13), 10]
+    : [5, 16, 18, 14, 20];
 
   const bytes = buildXlsx({
     sheetName: hourly ? 'Saatlik Stow' : 'Stow',
     rows,
     columnWidths,
-    freeze: { rows: 3, cols: 2 },
+    freeze: { rows: 3, cols: 3 },
   });
 
   const blob = new Blob([bytes], {

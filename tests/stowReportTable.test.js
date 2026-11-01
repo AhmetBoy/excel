@@ -3,6 +3,7 @@ import {
   buildHourlySlots,
   buildStowTable,
   formatSlotLabel,
+  parseUserEntries,
   parseUserList,
 } from '../shared/stowReportTable.js';
 
@@ -26,8 +27,8 @@ describe('buildHourlySlots', () => {
 });
 
 describe('parseUserList', () => {
-  it('accepts newline/comma/space separated logins, case-insensitive and deduped', () => {
-    expect(parseUserList('colfatma\nSSEAHMET, aslandot  colfatma;\n\n')).toEqual([
+  it('accepts one login per line (or comma/semicolon separated), case-insensitive and deduped', () => {
+    expect(parseUserList('colfatma\nSSEAHMET, aslandot ; colfatma;\n\n')).toEqual([
       'colfatma',
       'sseahmet',
       'aslandot',
@@ -36,7 +37,32 @@ describe('parseUserList', () => {
   });
 });
 
+describe('parseUserEntries', () => {
+  it('reads "Name login" lines, the last word being the login', () => {
+    expect(parseUserEntries('ahmet ahmet123\nAhmet Yılmaz AYILMAZ\ncolfatma')).toEqual([
+      { login: 'ahmet123', name: 'ahmet' },
+      { login: 'ayilmaz', name: 'Ahmet Yılmaz' },
+      { login: 'colfatma', name: null },
+    ]);
+  });
+
+  it('merges duplicates, keeping a name given on either line', () => {
+    expect(parseUserEntries('colfatma\nFatma colfatma')).toEqual([{ login: 'colfatma', name: 'Fatma' }]);
+  });
+});
+
 describe('buildStowTable', () => {
+  it('attaches the display name from the user list, null when unknown', () => {
+    const table = buildStowTable([[row('ahmet123', 5), row('x', 3)]], {
+      users: ['ahmet123', 'x'],
+      names: { ahmet123: 'Ahmet' },
+    });
+    expect(table.rows.map((r) => [r.login, r.name])).toEqual([
+      ['ahmet123', 'Ahmet'],
+      ['x', null],
+    ]);
+  });
+
   const slotRows = [
     [row('a', 10), row('b', 30)],
     [row('a', 50), row('c', 5)],

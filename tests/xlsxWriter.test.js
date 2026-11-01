@@ -78,18 +78,19 @@ describe('buildStowSheetRows', () => {
     );
 
     expect(rows[0][0].v).toBe('T');
-    expect(rows[2].map((c) => c.v).slice(0, 2)).toEqual(['#', 'Kullanıcı']);
+    expect(rows[2].map((c) => c.v).slice(0, 3)).toEqual(['#', 'Kullanıcı', 'İsim']);
     expect(rows[2].at(-1).v).toBe('Toplam');
     // a: 10 | 50 (top) | 60 (top)
     expect(rows[3].map((c) => [c.v, c.s])).toEqual([
       [1, undefined],
       ['a', undefined],
+      ['Bilinmiyor', undefined],
       [10, undefined],
       [50, XLSX_STYLE.TOP],
       [60, XLSX_STYLE.TOP],
     ]);
     // b: 30 is the top for the first hour
-    expect(rows[4][2]).toEqual({ v: 30, s: XLSX_STYLE.TOP });
-    expect(rows.at(-1).map((c) => c.v)).toEqual([null, 'Toplam (2 kişi)', 40, 50, 90]);
+    expect(rows[4][3]).toEqual({ v: 30, s: XLSX_STYLE.TOP });
+    expect(rows.at(-1).map((c) => c.v)).toEqual([null, 'Toplam (2 kişi)', null, 40, 50, 90]);
   });
 });
