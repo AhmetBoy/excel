@@ -1,4 +1,10 @@
-import { expandBin, findCandidates, parseAisleSpec, parseStowMapCsv } from '../shared/stowMap.js';
+import {
+  expandBin,
+  findCandidates,
+  parseAisleSpec,
+  parseStowMapCsv,
+  summarizeBins,
+} from '../shared/stowMap.js';
 
 // Storage layout (chrome.storage.local, needs "unlimitedStorage"; a floor is ~2 MB):
 //   stowMap:floor:<n>  -> { fileName, importedAt, bins: stored bin arrays }
@@ -22,6 +28,9 @@ const dropzoneSelect = document.getElementById('stowmap-dropzone');
 const shelvesEl = document.getElementById('stowmap-shelves');
 const hrvInput = document.getElementById('stowmap-hrv');
 const resultEl = document.getElementById('stowmap-result');
+const detailEl = document.getElementById('stowmap-detail');
+const detailSummaryEl = document.getElementById('stowmap-detail-summary');
+const detailBodyEl = document.getElementById('stowmap-detail-body');
 
 let floorsMeta = {};
 let savedCriteria = {};
@@ -210,14 +219,77 @@ function renderSuggestion(bin, total) {
   return card;
 }
 
+const fmt = (n) => n.toLocaleString('tr-TR');
+
+function detailTable(title, groups, { highlight = null } = {}) {
+  const table = el('table', 'stowmap-detail-table');
+  const head = el('tr');
+  for (const label of [title, 'Boş yeri olan', 'Toplam', 'Boş ASIN yeri', 'Kilitli']) head.append(el('th', null, label));
+  table.append(el('thead'));
+  table.tHead.append(head);
+  const body = el('tbody');
+  for (const g of groups) {
+    const tr = el('tr', highlight?.has(String(g.key)) ? 'is-selected' : null);
+    for (const value of [g.key, fmt(g.available), fmt(g.total), fmt(g.freeSlots), fmt(g.locked)]) {
+      tr.append(el('td', null, String(value)));
+    }
+    body.append(tr);
+  }
+  table.append(body);
+  return table;
+}
+
+/** "Detay": how many bins of the current selection still have room. */
+function renderDetail(criteria, aisles) {
+  detailEl.hidden = false;
+  const summary = summarizeBins(current.bins, current.marks, {
+    tower: criteria.tower,
+    aisles,
+    dropzone: criteria.dropzone,
+    hrvOnly: criteria.hrvOnly,
+    shelves: criteria.shelves,
+  });
+  const s = summary.selection;
+  detailSummaryEl.textContent =
+    `Detay — ${fmt(s.available)} lokasyonda boş yer var (${fmt(s.freeSlots)} farklı ASIN yeri)`;
+
+  const scope = [
+    `Kat ${criteria.floor}`,
+    `Tower ${criteria.tower}`,
+    criteria.aisles.trim() ? `Koridor ${criteria.aisles.trim()}` : 'tüm koridorlar',
+    criteria.shelves.length > 0 ? `Bin ${criteria.shelves.join(', ')}` : 'tüm binler',
+    criteria.dropzone || null,
+    criteria.hrvOnly ? 'HRV alabilen' : null,
+  ].filter(Boolean);
+
+  const children = [
+    el('div', 'stowmap-detail-scope', scope.join(' · ')),
+    el(
+      'div',
+      'stowmap-detail-totals',
+      `Toplam ${fmt(s.total)} lokasyon · ${fmt(s.available)} boş yeri olan · ` +
+        `${fmt(s.total - s.available - s.locked)} dolu · ${fmt(s.locked)} kilitli`
+    ),
+  ];
+  if (summary.byShelf.length > 0) {
+    // Every shelf is listed so they can be compared; the chosen ones are highlighted.
+    children.push(detailTable('Bin', summary.byShelf, { highlight: new Set(criteria.shelves) }));
+    children.push(detailTable('Koridor', summary.byAisle));
+    children.push(detailTable('Bin Type', summary.byBinType));
+  }
+  detailBodyEl.replaceChildren(...children);
+}
+
 function render() {
   renderFloors();
   if (!current.floor) {
+    detailEl.hidden = true;
     resultEl.replaceChildren();
     return;
   }
 
   const criteria = readCriteria();
+  renderDetail(criteria, parseAisleSpec(criteria.aisles));
   const candidates = findCandidates(current.bins, current.marks, {
     tower: criteria.tower,
     aisles: parseAisleSpec(criteria.aisles),

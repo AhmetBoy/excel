@@ -834,3 +834,50 @@ td.cell-hrv {
   color: #1d6b2c;
   margin-bottom: 6px;
 }
+
+#stowmap-detail {
+  border: 1px solid #dde1e6;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: #fafbfc;
+  font-size: 12px;
+}
+
+#stowmap-detail summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.stowmap-detail-scope {
+  color: #666;
+  margin: 6px 0 2px;
+}
+
+.stowmap-detail-totals {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.stowmap-detail-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.stowmap-detail-table th,
+.stowmap-detail-table td {
+  border-bottom: 1px solid #e6e8eb;
+  padding: 3px 6px;
+  text-align: right;
+}
+
+.stowmap-detail-table th:first-child,
+.stowmap-detail-table td:first-child {
+  text-align: left;
+}
+
+.stowmap-detail-table tr.is-selected td {
+  background: #e3effd;
+  font-weight: 700;
+}

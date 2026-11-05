@@ -180,3 +180,63 @@ export function findCandidates(bins, marks, criteria = {}) {
         a.aisle - b.aisle || a.position - b.position || a.shelf.localeCompare(b.shelf)
     );
 }
+
+function addTo(groups, key, bin, free) {
+  const g = groups.get(key) ?? { key, total: 0, available: 0, freeSlots: 0, locked: 0 };
+  g.total++;
+  if (bin.locked) g.locked++;
+  else if (free > 0) {
+    g.available++;
+    g.freeSlots += free;
+  }
+  groups.set(key, g);
+}
+
+/**
+ * Counts for the "Detay" panel: how many bins of the selection still have
+ * room, broken down per shelf (bin letter), aisle and bin type. The shelf
+ * filter is left out on purpose so every shelf's numbers can be compared;
+ * `selectedShelves` only decides which shelves the `selection` totals sum.
+ *
+ * @param {object[]} bins - expanded bins
+ * @param {Record<string, {added?: number, full?: boolean}>} marks
+ * @param {{ tower?: string, aisles?: Array<[number, number]>|null, dropzone?: string,
+ *   hrvOnly?: boolean, shelves?: string[] }} criteria
+ */
+export function summarizeBins(bins, marks, criteria = {}) {
+  const { tower, aisles, dropzone, hrvOnly, shelves } = criteria;
+  const inAisles = (aisle) => !aisles || aisles.some(([a, b]) => aisle >= a && aisle <= b);
+  const byShelf = new Map();
+  const byAisle = new Map();
+  const byBinType = new Map();
+
+  for (const bin of bins) {
+    if (tower && bin.tower !== tower) continue;
+    if (dropzone && bin.dropzone !== dropzone) continue;
+    if (hrvOnly && !bin.canHoldHrv) continue;
+    if (!inAisles(bin.aisle)) continue;
+    const free = bin.max - effectiveUnique(bin, marks[bin.id]);
+    addTo(byShelf, bin.shelf, bin, free);
+    addTo(byAisle, bin.aisle, bin, free);
+    addTo(byBinType, bin.binType, bin, free);
+  }
+
+  const sorted = (map, compare) => [...map.values()].sort(compare);
+  const shelfList = sorted(byShelf, (a, b) => a.key.localeCompare(b.key));
+  const selectedSet = shelves && shelves.length > 0 ? new Set(shelves) : null;
+  const selection = { total: 0, available: 0, freeSlots: 0, locked: 0 };
+  for (const g of shelfList) {
+    if (selectedSet && !selectedSet.has(g.key)) continue;
+    selection.total += g.total;
+    selection.available += g.available;
+    selection.freeSlots += g.freeSlots;
+    selection.locked += g.locked;
+  }
+
+  return {
+    selection,
+    byShelf: shelfList,
+    byAisle: sorted(byAisle, (a, b) => a.key - b.key),
+    byBinType: sorted(byBinType, (a, b) => b.available - a.available || a.key.localeCompare(b.key)),
+  };
+}

@@ -6,6 +6,7 @@ import {
   parseAisleSpec,
   parseBinId,
   parseStowMapCsv,
+  summarizeBins,
 } from '../shared/stowMap.js';
 
 const HEADER =
@@ -90,5 +91,28 @@ describe('findCandidates', () => {
     const ids = findCandidates(bins, marks, { tower: 'A', skip: new Set(['P-1-A215A100']) }).map((b) => b.id);
     expect(ids).toEqual([]);
     expect(effectiveUnique({ unique: 1, max: 6 }, { added: 2 })).toBe(3);
+  });
+});
+
+describe('summarizeBins', () => {
+  const bins = parseStowMapCsv(
+    [
+      HEADER,
+      line('P-1-A205B100', { unique: 1 }), // 5 free
+      line('P-1-A205B101', { unique: 6 }), // full
+      line('P-1-A205C100', { locked: 'true' }),
+      line('P-1-A206C100', { unique: 4 }), // 2 free
+      line('P-1-D205B100'),
+    ].join('\n')
+  ).floors['1'].map(expandBin);
+
+  it('counts bins with room per shelf, aisle and the selected shelves', () => {
+    const summary = summarizeBins(bins, { 'P-1-A206C100': { added: 1 } }, { tower: 'A', shelves: ['B'] });
+    expect(summary.selection).toEqual({ total: 2, available: 1, freeSlots: 5, locked: 0 });
+    expect(summary.byShelf).toEqual([
+      { key: 'B', total: 2, available: 1, freeSlots: 5, locked: 0 },
+      { key: 'C', total: 2, available: 1, freeSlots: 1, locked: 1 },
+    ]);
+    expect(summary.byAisle.map((g) => [g.key, g.available])).toEqual([[205, 1], [206, 1]]);
   });
 });
