@@ -1,0 +1,7 @@
+# Data and sample files saved from the warehouse tools (may hold real data)
+/*.csv
+/*.xlsx
+/*.txt
+/*.html
+/dist/
+/git

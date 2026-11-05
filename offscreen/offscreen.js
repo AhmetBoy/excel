@@ -4,6 +4,7 @@
 import { parseInventoryHtml } from '../shared/parsers/inventoryParser.js';
 import { parseContainerHierarchyHtml } from '../shared/parsers/containerHierarchyParser.js';
 import { parseInventoryHistoryHtml } from '../shared/parsers/inventoryHistoryParser.js';
+import { parseProductHtml } from '../shared/parsers/productParser.js';
 
 const PARSERS = {
   PARSE_INVENTORY_HTML: {
@@ -17,6 +18,10 @@ const PARSERS = {
   PARSE_INVENTORY_HISTORY_HTML: {
     parse: parseInventoryHistoryHtml,
     empty: { found: false, records: [], paginationToken: null },
+  },
+  PARSE_PRODUCT_HTML: {
+    parse: parseProductHtml,
+    empty: { found: false, highValue: null, imageUrl: null, title: null },
   },
 };
 
