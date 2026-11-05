@@ -688,3 +688,149 @@ td.cell-hrv {
   color: #666;
   font-size: 11px;
 }
+
+/* StowMap tab */
+#stowmap-import {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+#stowmap-import .hint {
+  font-size: 11px;
+  color: #666;
+}
+
+.file-button {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #232f3e;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#stowmap-floors {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 12px;
+  color: #444;
+}
+
+#stowmap-criteria select,
+#stowmap-criteria input[type='text'] {
+  padding: 5px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.stowmap-shelves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.shelf-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 600;
+}
+
+.stowmap-card {
+  border: 2px solid #1f6fd1;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fff;
+  margin-bottom: 8px;
+}
+
+.stowmap-count {
+  font-size: 11px;
+  color: #666;
+}
+
+.stowmap-bin {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 2px 0;
+}
+
+.stowmap-parts {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b4a9e;
+}
+
+.stowmap-meta,
+.stowmap-note {
+  font-size: 12px;
+  color: #444;
+  margin-top: 2px;
+}
+
+.stowmap-note {
+  color: #1d6b2c;
+}
+
+.stowmap-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.stowmap-actions button,
+.btn-undo {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+}
+
+.btn-stowed {
+  background: #1d8a3a;
+}
+
+.btn-full {
+  background: #c0392b;
+}
+
+.btn-skip {
+  background: #7a7a7a;
+}
+
+.btn-undo {
+  background: #e0e3e7;
+  color: #1a1a1a;
+}
+
+.stowmap-next-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.stowmap-next {
+  margin: 2px 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #444;
+}
+
+.stowmap-import-note {
+  font-size: 11px;
+  color: #1d6b2c;
+  margin-bottom: 6px;
+}

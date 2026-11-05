@@ -15,6 +15,7 @@
     <button class="tab active" type="button" role="tab" data-tab="lookup">Tote Lookup</button>
     <button class="tab" type="button" role="tab" data-tab="report">Rapor</button>
     <button class="tab" type="button" role="tab" data-tab="barcode">Barkod</button>
+    <button class="tab" type="button" role="tab" data-tab="stowmap">StowMap</button>
   </nav>
 
   <section id="tab-lookup" class="tab-panel">
@@ -143,10 +144,46 @@
     <div id="barcode-output" class="barcode-grid"></div>
   </section>
 
+  <section id="tab-stowmap" class="tab-panel" hidden>
+    <div id="stowmap-import">
+      <label class="file-button">
+        CSV yükle
+        <input id="stowmap-file" type="file" accept=".csv,text/csv" multiple hidden />
+      </label>
+      <span class="hint">Her kat için StowMap BinStatus_Report CSV'si. Bir katı yeniden yüklemek o katın kayıtlarını sıfırlar.</span>
+    </div>
+    <ul id="stowmap-floors"></ul>
+
+    <form id="stowmap-criteria" hidden>
+      <div class="report-grid">
+        <label>Kat
+          <select id="stowmap-floor"></select>
+        </label>
+        <label>Pick Tower
+          <select id="stowmap-tower"></select>
+        </label>
+        <label>Koridor (isteğe bağlı)
+          <input id="stowmap-aisles" type="text" placeholder="ör. 215 veya 205-209" autocomplete="off" />
+        </label>
+        <label>Dropzone (isteğe bağlı)
+          <select id="stowmap-dropzone"></select>
+        </label>
+      </div>
+      <div class="stowmap-shelves">
+        <span>Bin:</span>
+        <span id="stowmap-shelves"></span>
+        <label class="checkbox-label"><input id="stowmap-hrv" type="checkbox" /> Sadece HRV alabilen</label>
+      </div>
+    </form>
+
+    <section id="stowmap-result" aria-live="polite"></section>
+  </section>
+
   <div id="toast" role="status" hidden></div>
 
   <script type="module" src="sidepanel.js"></script>
   <script type="module" src="reportTab.js"></script>
   <script type="module" src="barcodeTab.js"></script>
+  <script type="module" src="stowMapTab.js"></script>
 </body>
 </html>
