@@ -3,6 +3,7 @@ import {
   dedupeDropZoneDisplay,
   describeSourceStatus,
   filterRows,
+  hasHighValue,
   renderRows,
   reorderColumns,
 } from '../shared/resultsView.js';
@@ -15,6 +16,7 @@ import {
 } from '../shared/toteChecks.js';
 import { classifyLookupInput } from '../shared/lookupInput.js';
 import { renderUserResults } from './userResults.js';
+import { renderLocationResults } from './locationResults.js';
 
 const form = document.getElementById('search-form');
 const toteInput = document.getElementById('tote-input');
@@ -35,11 +37,14 @@ const copyToteButton = document.getElementById('copy-tote-button');
 const copyFeedbackEl = document.getElementById('copy-feedback');
 const autoCopyInput = document.getElementById('auto-copy-input');
 const userResultsEl = document.getElementById('user-results');
+const locationResultsEl = document.getElementById('location-results');
+const lastToteKindEl = document.getElementById('last-tote-kind');
 
 const COLUMN_ORDER_STORAGE_KEY = 'toteLookupColumnOrder';
 const AUTO_COPY_STORAGE_KEY = 'toteLookupAutoCopy';
 const COPY_FEEDBACK_MS = 1500;
 const NOT_PERMITTED_TOAST_MESSAGE = 'NOT_PERMITTED ISS';
+const HRV_TOAST_MESSAGE = 'HRV ÜRÜN';
 const TOAST_DURATION_MS = 2000;
 
 let lastRows = [];
@@ -47,6 +52,7 @@ let lastToteNumber = '';
 let currentColumns = COLUMNS;
 let draggedColumnKey = null;
 let toastTimeoutId = null;
+const toastQueue = [];
 let copyFeedbackTimeoutId = null;
 
 async function copyToteNumber(toteNumber) {
@@ -64,7 +70,8 @@ async function copyToteNumber(toteNumber) {
   }, COPY_FEEDBACK_MS);
 }
 
-function showLastTote(toteNumber) {
+function showLastTote(toteNumber, kindLabel = 'tote') {
+  lastToteKindEl.textContent = kindLabel;
   lastToteValueEl.textContent = toteNumber;
   lastToteEl.hidden = false;
 }
@@ -74,13 +81,36 @@ async function loadAutoCopy() {
   autoCopyInput.checked = data[AUTO_COPY_STORAGE_KEY] ?? true;
 }
 
-function showToast(message, durationMs = TOAST_DURATION_MS) {
-  if (toastTimeoutId) clearTimeout(toastTimeoutId);
-  toastEl.textContent = message;
-  toastEl.hidden = false;
-  toastTimeoutId = setTimeout(() => {
+function showNextToast() {
+  const next = toastQueue.shift();
+  if (!next) {
     toastEl.hidden = true;
-  }, durationMs);
+    toastTimeoutId = null;
+    return;
+  }
+  toastEl.textContent = next.message;
+  toastEl.className = next.variant ? `toast-${next.variant}` : '';
+  toastEl.hidden = false;
+  toastTimeoutId = setTimeout(showNextToast, next.durationMs);
+}
+
+/**
+ * Shows a short message at the bottom. Toasts raised together (e.g.
+ * NOT_PERMITTED and HRV for the same tote) are shown one after another.
+ * @param {string} message
+ * @param {{ variant?: 'info', durationMs?: number }} [options] - 'info' = blue
+ */
+function showToast(message, { variant = null, durationMs = TOAST_DURATION_MS } = {}) {
+  toastQueue.push({ message, variant, durationMs });
+  if (!toastTimeoutId) showNextToast();
+}
+
+// New lookup: drop toasts still waiting from the previous one.
+function clearToasts() {
+  toastQueue.length = 0;
+  if (toastTimeoutId) clearTimeout(toastTimeoutId);
+  toastTimeoutId = null;
+  toastEl.hidden = true;
 }
 
 async function loadColumnOrder() {
@@ -168,7 +198,14 @@ function badgeClass(status) {
 }
 
 function renderSourceStatus(sourceStatus) {
-  const labels = { inventory: 'Inventory', pandash: 'Pandash', sideline: 'Sideline', qt: 'QT' };
+  const labels = {
+    inventory: 'Inventory',
+    pandash: 'Pandash',
+    product: 'Ürün (HRV)',
+    sideline: 'Sideline',
+    qt: 'QT',
+    history: 'Inventory History',
+  };
   sourceStatusEl.replaceChildren(
     ...Object.entries(sourceStatus).map(([key, status]) => {
       const badge = document.createElement('span');
@@ -191,7 +228,7 @@ function prepareForNextScan() {
   toteInput.value = '';
   toteInput.placeholder = lastToteNumber
     ? `Son aranan: ${lastToteNumber} — yeni tote okutun`
-    : 'Tote numarası veya kullanıcı adı girin';
+    : 'Tote, lokasyon, ASIN/LPN veya kullanıcı adı girin';
   toteInput.focus();
 }
 
@@ -241,17 +278,28 @@ function applyFilterAndRender() {
     columnClass: dropZoneColumnClass(lastRows),
   };
   renderRows(resultsBodyEl, dedupeDropZoneDisplay(filtered), currentColumns, (row, key) =>
-    cellHighlightClass(row, key, highlightContext)
+    key === 'hrv'
+      ? row.highValue === true
+        ? 'cell-hrv'
+        : null
+      : cellHighlightClass(row, key, highlightContext)
   );
 }
 
-async function runLookup(toteNumber) {
+/**
+ * Tote, bin (location) or product barcode lookup.
+ * @param {string} toteNumber - the scanned value
+ * @param {'container'|'location'|'product'} [kind]
+ */
+async function runLookup(toteNumber, kind = 'container') {
   setLoading(true);
+  clearToasts();
   retryButton.hidden = true;
   userResultsEl.hidden = true;
+  locationResultsEl.hidden = true;
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_TOTE', toteNumber });
+    const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_TOTE', toteNumber, kind });
     if (!response) {
       throw new Error('Arka plan betiğinden yanıt alınamadı.');
     }
@@ -262,13 +310,23 @@ async function runLookup(toteNumber) {
     // A failed (or partly failed) Pandash request leaves DropZones unknown;
     // only a real "no value" answer may be read as NOT_PERMITTED.
     const pandashOk = !ERROR_STATUSES.has(pandashStatus) && pandashStatus !== 'partial_failure';
-    renderToteVerdict(lastRows, { pandashOk });
+    // Stow-readiness rules are about a tote; a bin or product search skips them.
+    const isTote = kind === 'container';
+    renderToteVerdict(isTote ? lastRows : [], { pandashOk });
     filterBarEl.hidden = false;
     resultsWrapperEl.hidden = false;
     applyFilterAndRender();
 
-    if (pandashOk && hasNotPermitted(lastRows)) {
+    if (!isTote) {
+      renderLocationResults(locationResultsEl, { ...response, kind });
+      locationResultsEl.hidden = false;
+    }
+
+    if (isTote && pandashOk && hasNotPermitted(lastRows)) {
       showToast(NOT_PERMITTED_TOAST_MESSAGE);
+    }
+    if (hasHighValue(lastRows)) {
+      showToast(HRV_TOAST_MESSAGE, { variant: 'info' });
     }
   } catch (error) {
     renderToteVerdict([]);
@@ -283,6 +341,7 @@ async function runLookup(toteNumber) {
 
 function hideToteResults() {
   renderToteVerdict([]);
+  locationResultsEl.hidden = true;
   filterBarEl.hidden = true;
   resultsWrapperEl.hidden = true;
 }
@@ -307,6 +366,7 @@ function openContainer(scannableId) {
  */
 async function runUserLookup({ login, query }) {
   setLoading(true);
+  clearToasts();
   retryButton.hidden = true;
   hideToteResults();
   userResultsEl.hidden = true;
@@ -332,13 +392,13 @@ function runSearch(value) {
   const input = classifyLookupInput(value);
   if (!input) return;
   lastToteNumber = input.query;
-  showLastTote(input.query);
+  showLastTote(input.query, input.label.toLocaleLowerCase('tr'));
   if (input.kind === 'user') {
     runUserLookup(input);
     return;
   }
   if (autoCopyInput.checked) copyToteNumber(input.query);
-  runLookup(input.query);
+  runLookup(input.query, input.kind);
 }
 
 form.addEventListener('submit', (event) => {

@@ -5,6 +5,7 @@ export const COLUMNS = [
   { key: 'consumer', label: 'Consumer' },
   { key: 'disposition', label: 'Disposition' },
   { key: 'binDescription', label: 'Bin Description' },
+  { key: 'hrv', label: 'HRV' },
   { key: 'container', label: 'Container' },
   { key: 'asin', label: 'ASIN' },
   { key: 'fnSku', label: 'FNSku' },
@@ -71,6 +72,28 @@ export function describeDataStatus(row) {
 
   return warnings.length > 0 ? warnings.join(', ') : 'Tam';
 }
+
+/**
+ * HRV column text: "HRV" when FC Research marks the product High Value,
+ * "-" when it says no, "?" when the field couldn't be read.
+ * @param {object} row
+ * @returns {string}
+ */
+export function describeHrv(row) {
+  if (row.highValue === true) return 'HRV';
+  if (row.highValue === false) return '-';
+  return row.asin ? '?' : '-';
+}
+
+/** True when any product of the result is High Value. */
+export function hasHighValue(rows) {
+  return (rows ?? []).some((row) => row.highValue === true);
+}
+
+const CELL_RENDERERS = {
+  dataStatus: describeDataStatus,
+  hrv: describeHrv,
+};
 
 /**
  * Suppresses repeated DropZone display for rows sharing the same FNSku
@@ -167,8 +190,8 @@ export function renderRows(tbody, rows, columns = COLUMNS, getCellClass = null) 
     const tr = document.createElement('tr');
     for (const column of columns) {
       const td = document.createElement('td');
-      td.textContent =
-        column.key === 'dataStatus' ? describeDataStatus(row) : displayOrMissing(row[column.key]);
+      const renderCell = CELL_RENDERERS[column.key];
+      td.textContent = renderCell ? renderCell(row) : displayOrMissing(row[column.key]);
       const cellClass = getCellClass?.(row, column.key);
       if (cellClass) td.className = cellClass;
       tr.appendChild(td);

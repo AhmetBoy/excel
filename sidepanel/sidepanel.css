@@ -579,3 +579,112 @@ th.dragging {
 #report-table td.unknown-name {
   color: #999;
 }
+
+/* HRV (High Value) */
+#toast.toast-info {
+  background: #1f6fd1;
+}
+
+td.cell-hrv {
+  background: #d6e6fb;
+  color: #0b4a9e;
+  font-weight: 700;
+}
+
+.badge-hrv {
+  background: #1f6fd1;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Location / product cards */
+#location-results:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.product-card {
+  display: flex;
+  gap: 10px;
+  border: 1px solid #dde1e6;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.product-image {
+  flex: 0 0 88px;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f4f5f7;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #777;
+  overflow: hidden;
+}
+
+.product-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.product-info {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.product-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.product-title {
+  color: #333;
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.product-meta {
+  color: #555;
+}
+
+.stow-history {
+  margin-top: 6px;
+  border-top: 1px dashed #dde1e6;
+  padding-top: 4px;
+}
+
+.stow-history-title {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.stow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stow-list li {
+  padding: 2px 0;
+}
+
+.stow-list li.stow-failed {
+  color: #8e1c12;
+}
+
+.stow-shift,
+.stow-empty {
+  color: #666;
+  font-size: 11px;
+}

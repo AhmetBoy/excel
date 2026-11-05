@@ -10,6 +10,7 @@ import { fetchSidelineItem } from './services/sidelineService.js';
 import { parseSidelineResponse } from '../shared/parsers/sidelineParser.js';
 import { hasMorePages } from '../shared/parsers/containerHierarchyParser.js';
 import { analyzeStowErrors, buildHistoryDateFields } from '../shared/stowErrors.js';
+import { LOCATION_HISTORY_DAYS } from '../shared/locationStows.js';
 
 // Without this, clicking the toolbar icon does nothing because there is
 // no action.default_popup - the side panel must be opened explicitly.
@@ -146,41 +147,93 @@ async function resolveQt(toteNumber) {
   return { products, status: products.length > 0 ? 'ok' : 'no_datelot_screen' };
 }
 
+const MAX_PARALLEL_PRODUCT_REQUESTS = 4;
+
 /**
- * Orchestrates one tote lookup across all three sources. Each source is
- * resolved independently so a failure in one (e.g. no QT tab open) never
- * discards valid results already obtained from the others.
- *
- * @param {string} toteNumber
- * @returns {Promise<{ toteNumber: string, rows: object[], sourceStatus: object }>}
+ * FC Research "product" section per ASIN: High Value flag + image.
+ * @returns {Promise<{ matches: Array<{asin: string, highValue: boolean|null, imageUrl: string|null, status: string}>, status: string }>}
  */
-async function lookupTote(toteNumber) {
+async function resolveProducts(asins) {
+  if (asins.length === 0) return { matches: [], status: 'skipped_no_asin' };
+
+  const matches = await mapWithConcurrency(asins, MAX_PARALLEL_PRODUCT_REQUESTS, async (asin) => {
+    const response = await fetchFcResearchSection('product', { s: asin });
+    if (response.status !== 'ok') return { asin, highValue: null, imageUrl: null, status: response.status };
+    const parsed = await parseViaOffscreen('PARSE_PRODUCT_HTML', response.html);
+    if (!parsed.found) return { asin, highValue: null, imageUrl: null, status: 'not_found' };
+    return { asin, highValue: parsed.highValue, imageUrl: parsed.imageUrl, status: 'ok' };
+  });
+
+  const failed = matches.filter((m) => m.status !== 'ok');
+  let status = 'ok';
+  if (failed.length === matches.length) status = failed[0].status;
+  else if (failed.length > 0) status = 'partial_failure';
+  else if (matches.every((m) => m.highValue === null)) status = 'no_data';
+  return { matches, status };
+}
+
+/** Inventory History of a bin, for "who stowed this product here". */
+async function resolveLocationHistory(location) {
+  const result = await fetchPagedSection(
+    'inventory-history',
+    { s: location, ...buildHistoryDateFields(new Date(), LOCATION_HISTORY_DAYS) },
+    'PARSE_INVENTORY_HISTORY_HTML',
+    'records'
+  );
+  return { status: result.status, records: result.items };
+}
+
+// Which extra sources run for each kind of scan (see shared/lookupInput.js).
+// Sideline and QT work on a tote, so a bin or product search skips them.
+const SOURCE_PLAN = {
+  container: { sideline: true, qt: true, history: false },
+  location: { sideline: false, qt: false, history: true },
+  product: { sideline: false, qt: false, history: false },
+};
+
+const skipped = (extra) => Promise.resolve({ status: 'skipped', ...extra });
+
+/**
+ * Orchestrates one lookup (tote, bin or product barcode) across the
+ * sources in SOURCE_PLAN. Each source is resolved independently so a
+ * failure in one (e.g. no QT tab open) never discards valid results
+ * already obtained from the others.
+ *
+ * @param {string} toteNumber - the scanned value
+ * @param {string} [kind] - 'container' | 'location' | 'product'
+ * @returns {Promise<{ toteNumber: string, kind: string, rows: object[], sourceStatus: object, locationHistory?: object[] }>}
+ */
+async function lookupTote(toteNumber, kind = 'container') {
+  const plan = SOURCE_PLAN[kind] ?? SOURCE_PLAN.container;
   const inventory = await resolveInventory(toteNumber);
   const distinctAsins = [...new Set(inventory.records.map((r) => r.asin).filter(Boolean))];
 
-  const [pandash, sideline, qt] = await Promise.all([
+  const [pandash, product, sideline, qt, history] = await Promise.all([
     resolvePandash(distinctAsins),
-    resolveSideline(toteNumber, distinctAsins),
-    resolveQt(toteNumber),
+    resolveProducts(distinctAsins),
+    plan.sideline ? resolveSideline(toteNumber, distinctAsins) : skipped({ matches: [] }),
+    plan.qt ? resolveQt(toteNumber) : skipped({ products: [] }),
+    plan.history ? resolveLocationHistory(toteNumber) : skipped({ records: [] }),
   ]);
 
   const { rows } = buildResultRows({
     inventoryRecords: inventory.records,
     pandashMatches: pandash.matches,
     sidelineMatches: sideline.matches,
+    productMatches: product.matches,
     qtProducts: qt.products,
   });
 
-  return {
-    toteNumber,
-    rows,
-    sourceStatus: {
-      inventory: inventory.status,
-      pandash: pandash.status,
-      sideline: sideline.status,
-      qt: qt.status,
-    },
+  const sourceStatus = {
+    inventory: inventory.status,
+    pandash: pandash.status,
+    product: product.status,
   };
+  if (plan.sideline) sourceStatus.sideline = sideline.status;
+  if (plan.qt) sourceStatus.qt = qt.status;
+  if (plan.history) sourceStatus.history = history.status;
+
+  return { toteNumber, kind, rows, sourceStatus, locationHistory: history.records };
 }
 
 // Safety cap on "-more" pages of one FC Research section.
@@ -359,13 +412,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'LOOKUP_TOTE') return undefined;
 
-  lookupTote(message.toteNumber)
+  lookupTote(message.toteNumber, message.kind)
     .then(sendResponse)
     .catch((error) =>
       sendResponse({
         toteNumber: message.toteNumber,
         rows: [],
-        sourceStatus: { inventory: 'error', pandash: 'error', sideline: 'error', qt: 'error' },
+        sourceStatus: { inventory: 'error' },
         error: String(error?.message ?? error),
       })
     );

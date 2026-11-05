@@ -18,10 +18,23 @@ function render() {
   output.replaceChildren(...parseLines(input.value).map(createBarcodeElement));
 }
 
-form.addEventListener('submit', (event) => {
-  event.preventDefault();
+function saveAndRender() {
   chrome.storage.local.set({ [STORAGE_KEY]: input.value });
   render();
+}
+
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  saveAndRender();
+});
+
+// Barcodes appear as soon as something is pasted (or typed); the button
+// still works for an explicit refresh.
+const AUTO_RENDER_DELAY_MS = 300;
+let autoRenderTimeoutId = null;
+input.addEventListener('input', () => {
+  clearTimeout(autoRenderTimeoutId);
+  autoRenderTimeoutId = setTimeout(saveAndRender, AUTO_RENDER_DELAY_MS);
 });
 
 chrome.storage.local.get(STORAGE_KEY).then((data) => {
