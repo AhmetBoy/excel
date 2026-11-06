@@ -133,6 +133,22 @@ export function parseAisleSpec(text) {
   return ranges.length > 0 ? ranges : null;
 }
 
+// Lowest real position per floor + tower. On floors 2 and 3 tower A the
+// shelves start at 110 (P-2-A200A110); lower ids in the report are not
+// stow targets, so they are left out of suggestions and counts.
+const MIN_POSITION = { '2A': 110, '3A': 110 };
+
+/** False for bin ids below the floor/tower's first real position. */
+export function isStowablePosition(bin) {
+  const min = MIN_POSITION[`${bin.floor}${bin.tower}`];
+  return !min || bin.position >= min;
+}
+
+/** Used share of the ASIN slots, 0-100 with one decimal (null when there are none). */
+export function occupancyPercent(used, capacity) {
+  return capacity > 0 ? Math.round((used / capacity) * 1000) / 10 : null;
+}
+
 /**
  * Unique ASIN count after this session's records ("Stow yapıldı" adds 1,
  * "Dolu" fills the bin).
@@ -163,6 +179,7 @@ export function findCandidates(bins, marks, criteria = {}) {
     .filter(
       (bin) =>
         !bin.locked &&
+        isStowablePosition(bin) &&
         (!tower || bin.tower === tower) &&
         (!shelfSet || shelfSet.has(bin.shelf)) &&
         (!dropzone || bin.dropzone === dropzone) &&
@@ -181,16 +198,23 @@ export function findCandidates(bins, marks, criteria = {}) {
     );
 }
 
+// Occupancy (used / capacity) counts the ASIN slots of unlocked bins only.
 function addTo(groups, key, bin, free) {
-  const g = groups.get(key) ?? { key, total: 0, available: 0, freeSlots: 0, locked: 0 };
+  const g = groups.get(key) ?? { key, total: 0, available: 0, freeSlots: 0, locked: 0, used: 0, capacity: 0 };
   g.total++;
   if (bin.locked) g.locked++;
-  else if (free > 0) {
-    g.available++;
-    g.freeSlots += free;
+  else {
+    g.used += bin.max - free;
+    g.capacity += bin.max;
+    if (free > 0) {
+      g.available++;
+      g.freeSlots += free;
+    }
   }
   groups.set(key, g);
 }
+
+const withOccupancy = (g) => ({ ...g, occupancy: occupancyPercent(g.used, g.capacity) });
 
 /**
  * Counts for the "Detay" panel: how many bins of the selection still have
@@ -211,6 +235,7 @@ export function summarizeBins(bins, marks, criteria = {}) {
   const byBinType = new Map();
 
   for (const bin of bins) {
+    if (!isStowablePosition(bin)) continue;
     if (tower && bin.tower !== tower) continue;
     if (dropzone && bin.dropzone !== dropzone) continue;
     if (hrvOnly && !bin.canHoldHrv) continue;
@@ -221,20 +246,17 @@ export function summarizeBins(bins, marks, criteria = {}) {
     addTo(byBinType, bin.binType, bin, free);
   }
 
-  const sorted = (map, compare) => [...map.values()].sort(compare);
+  const sorted = (map, compare) => [...map.values()].map(withOccupancy).sort(compare);
   const shelfList = sorted(byShelf, (a, b) => a.key.localeCompare(b.key));
   const selectedSet = shelves && shelves.length > 0 ? new Set(shelves) : null;
-  const selection = { total: 0, available: 0, freeSlots: 0, locked: 0 };
+  const selection = { total: 0, available: 0, freeSlots: 0, locked: 0, used: 0, capacity: 0 };
   for (const g of shelfList) {
     if (selectedSet && !selectedSet.has(g.key)) continue;
-    selection.total += g.total;
-    selection.available += g.available;
-    selection.freeSlots += g.freeSlots;
-    selection.locked += g.locked;
+    for (const field of Object.keys(selection)) selection[field] += g[field];
   }
 
   return {
-    selection,
+    selection: withOccupancy(selection),
     byShelf: shelfList,
     byAisle: sorted(byAisle, (a, b) => a.key - b.key),
     byBinType: sorted(byBinType, (a, b) => b.available - a.available || a.key.localeCompare(b.key)),

@@ -15,6 +15,7 @@ import {
   isMoveNeeded,
 } from '../shared/toteChecks.js';
 import { classifyLookupInput } from '../shared/lookupInput.js';
+import { isFeatureAllowed } from '../shared/access.js';
 import { renderUserResults } from './userResults.js';
 import { renderLocationResults } from './locationResults.js';
 
@@ -388,13 +389,17 @@ async function runUserLookup({ login, query }) {
   }
 }
 
-function runSearch(value) {
+async function runSearch(value) {
   const input = classifyLookupInput(value);
   if (!input) return;
   lastToteNumber = input.query;
   showLastTote(input.query, input.label.toLocaleLowerCase('tr'));
   if (input.kind === 'user') {
-    runUserLookup(input);
+    if (await isFeatureAllowed('userLookup')) runUserLookup(input);
+    else {
+      renderErrorBadge('Kullanıcı araması bu profilde kapalı.');
+      prepareForNextScan();
+    }
     return;
   }
   if (autoCopyInput.checked) copyToteNumber(input.query);

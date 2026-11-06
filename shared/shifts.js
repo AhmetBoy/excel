@@ -20,7 +20,7 @@ const pad = (n) => String(n).padStart(2, '0');
  * Which shift a moment (local time) falls in.
  *
  * @param {Date} date
- * @returns {{ name: string, range: string, day: string, shiftDate: Date, label: string } | null}
+ * @returns {{ name: string, range: string, day: string, shiftDate: Date, startsAt: Date, label: string } | null}
  */
 export function shiftOf(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
@@ -36,7 +36,9 @@ export function shiftOf(date) {
 
   const range = `${pad(shift.start)}:00-${pad(shift.end)}:00`;
   const day = DAY_NAMES[shiftDate.getDay()];
-  return { name: shift.name, range, day, shiftDate, label: `${day} ${shift.name} ${range}` };
+  const startsAt = new Date(shiftDate);
+  startsAt.setHours(shift.start);
+  return { name: shift.name, range, day, shiftDate, startsAt, label: `${day} ${shift.name} ${range}` };
 }
 
 /** "05.11.2026 14:32" in local time. */

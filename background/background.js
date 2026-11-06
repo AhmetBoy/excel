@@ -11,6 +11,8 @@ import { parseSidelineResponse } from '../shared/parsers/sidelineParser.js';
 import { hasMorePages } from '../shared/parsers/containerHierarchyParser.js';
 import { analyzeStowErrors, buildHistoryDateFields } from '../shared/stowErrors.js';
 import { LOCATION_HISTORY_DAYS } from '../shared/locationStows.js';
+import { startRozetWatch } from './rozetScanner.js';
+import { isFeatureAllowed } from '../shared/access.js';
 
 // Without this, clicking the toolbar icon does nothing because there is
 // no action.default_popup - the side panel must be opened explicitly.
@@ -183,12 +185,16 @@ async function resolveLocationHistory(location) {
   return { status: result.status, records: result.items };
 }
 
+// Sideline's item scan needs a container. A product scan has none, so it
+// asks with this fixed csX instead - binDescription comes back the same.
+const SIDELINE_TEMP_CONTAINER = 'csXhg2ggqxb';
+
 // Which extra sources run for each kind of scan (see shared/lookupInput.js).
-// Sideline and QT work on a tote, so a bin or product search skips them.
+// QT works on a tote only; a bin search skips Sideline too.
 const SOURCE_PLAN = {
   container: { sideline: true, qt: true, history: false },
   location: { sideline: false, qt: false, history: true },
-  product: { sideline: false, qt: false, history: false },
+  product: { sideline: true, sidelineContainer: SIDELINE_TEMP_CONTAINER, qt: false, history: false },
 };
 
 const skipped = (extra) => Promise.resolve({ status: 'skipped', ...extra });
@@ -211,7 +217,9 @@ async function lookupTote(toteNumber, kind = 'container') {
   const [pandash, product, sideline, qt, history] = await Promise.all([
     resolvePandash(distinctAsins),
     resolveProducts(distinctAsins),
-    plan.sideline ? resolveSideline(toteNumber, distinctAsins) : skipped({ matches: [] }),
+    plan.sideline
+      ? resolveSideline(plan.sidelineContainer ?? toteNumber, distinctAsins)
+      : skipped({ matches: [] }),
     plan.qt ? resolveQt(toteNumber) : skipped({ products: [] }),
     plan.history ? resolveLocationHistory(toteNumber) : skipped({ records: [] }),
   ]);
@@ -243,10 +251,11 @@ const MAX_PARALLEL_CONTAINER_LOOKUPS = 4;
 /**
  * Fetches an FC Research section and follows its pagination tokens.
  * `parseType` is the offscreen parser message; `listKey` the array to collect.
+ * `stopAfter(items)` can end paging early (e.g. once rows get too old).
  *
  * @returns {Promise<{ status: string, first?: object, items: object[] }>}
  */
-async function fetchPagedSection(section, fields, parseType, listKey) {
+async function fetchPagedSection(section, fields, parseType, listKey, { stopAfter } = {}) {
   const response = await fetchFcResearchSection(section, fields);
   if (response.status !== 'ok') return { status: response.status, items: [] };
 
@@ -256,7 +265,11 @@ async function fetchPagedSection(section, fields, parseType, listKey) {
   const items = [...first[listKey]];
   let token = first.paginationToken;
   let partial = false;
-  for (let page = 0; hasMorePages(token) && page < MAX_SECTION_PAGES; page++) {
+  for (
+    let page = 0;
+    hasMorePages(token) && page < MAX_SECTION_PAGES && !stopAfter?.(items);
+    page++
+  ) {
     const more = await fetchFcResearchSectionMore(section, token);
     if (more.status !== 'ok') {
       partial = true;
@@ -378,10 +391,13 @@ async function fetchStowReport({ warehouseId, queryHash, timeRanges }) {
   };
 }
 
+startRozetWatch({ fetchPagedSection, mapWithConcurrency });
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'FETCH_STOW_REPORT') return undefined;
 
-  fetchStowReport(message.params)
+  isFeatureAllowed('report')
+    .then((allowed) => (allowed ? fetchStowReport(message.params) : { ...{ status: 'error', message: 'Bu özellik giriş yapılan profilde kapalı.' }, slots: [] }))
     .then(sendResponse)
     .catch((error) =>
       sendResponse({ status: 'error', slots: [], message: String(error?.message ?? error) })
@@ -393,7 +409,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'LOOKUP_USER') return undefined;
 
-  lookupUser(message)
+  isFeatureAllowed('userLookup')
+    .then((allowed) => (allowed ? lookupUser(message) : { status: 'error', message: 'Bu özellik giriş yapılan profilde kapalı.' }))
     .then(sendResponse)
     .catch((error) =>
       sendResponse({

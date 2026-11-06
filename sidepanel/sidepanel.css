@@ -881,3 +881,417 @@ td.cell-hrv {
   background: #e3effd;
   font-weight: 700;
 }
+
+/* Rozet tab */
+.tabs {
+  flex-wrap: wrap;
+}
+
+.tab-count {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.rozet-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.rozet-controls .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.rozet-controls select {
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.rozet-hint {
+  font-size: 11px;
+  color: #666;
+  margin: 2px 0 6px;
+}
+
+.rozet-table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 10px;
+}
+
+.rozet-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.rozet-table th,
+.rozet-table td {
+  border-bottom: 1px solid #e6e8eb;
+  padding: 4px 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rozet-table th:nth-child(-n + 2),
+.rozet-table td:nth-child(-n + 2) {
+  text-align: left;
+}
+
+.rozet-table th {
+  background: #f3f4f6;
+  font-size: 11px;
+}
+
+.rozet-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid #ccc;
+}
+
+.rozet-row-link {
+  cursor: pointer;
+}
+
+.rozet-row-link:hover td {
+  background: #f5f8fc;
+}
+
+.rozet-num-open {
+  color: #c0392b;
+  font-weight: 700;
+}
+
+.rozet-num-badge {
+  background: #fde4e4;
+  font-weight: 700;
+}
+
+.rozet-list-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.rozet-list-bar .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rozet-list-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.rozet-user {
+  border: 1px solid #dde1e6;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: #fafbfc;
+}
+
+.rozet-user summary {
+  cursor: pointer;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.rozet-group {
+  border-left: 4px solid #e0a800;
+  background: #fff;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 6px 0;
+}
+
+.rozet-group.is-rozet {
+  border-left-color: #c0392b;
+}
+
+.rozet-group.is-resolved {
+  border-left-color: #1d8a3a;
+  opacity: 0.75;
+}
+
+.rozet-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.rozet-group-title {
+  flex: 1 1 auto;
+}
+
+.rozet-count {
+  font-weight: 700;
+  color: #8a6500;
+}
+
+.rozet-count.is-rozet {
+  color: #c0392b;
+}
+
+.rozet-badge {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rozet-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  border-top: 1px dashed #eceef1;
+  font-size: 12px;
+}
+
+.rozet-event-time {
+  color: #666;
+  min-width: 40px;
+}
+
+.rozet-event-bin {
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.rozet-event-state {
+  flex: 1 1 auto;
+  color: #c0392b;
+}
+
+.rozet-event.is-resolved .rozet-event-state {
+  color: #1d8a3a;
+}
+
+.rozet-event.is-resolved .rozet-event-bin {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.btn-resolve,
+.btn-secondary,
+.btn-danger,
+.btn-icon {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-resolve {
+  background: #1d8a3a;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #e0e3e7;
+  color: #1a1a1a;
+}
+
+.btn-danger {
+  background: #c0392b;
+  color: #fff;
+}
+
+.btn-icon {
+  background: transparent;
+  color: #888;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+.btn-resolve:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-resolve:hover:not(:disabled) {
+  background: #176f2f;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #a5301f;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #d3d7dc;
+}
+
+.btn-icon:hover {
+  background: transparent;
+  color: #c0392b;
+}
+
+/* StowMap occupancy */
+.stowmap-detail-table td.occ-low {
+  color: #1d6b2c;
+  font-weight: 600;
+}
+
+.stowmap-detail-table td.occ-mid {
+  background: #fff6e0;
+  color: #8a6500;
+  font-weight: 600;
+}
+
+.stowmap-detail-table td.occ-high {
+  background: #fde4e4;
+  color: #c0392b;
+  font-weight: 700;
+}
+
+/* Login + profiles */
+#login-screen {
+  display: none;
+}
+
+body.locked > *:not(#login-screen) {
+  display: none !important;
+}
+
+body.locked #login-screen {
+  display: flex;
+  justify-content: center;
+  padding-top: 40px;
+}
+
+#login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 260px;
+}
+
+#login-form input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.login-error {
+  color: #c0392b;
+  font-size: 12px;
+  margin: 0;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.session-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.role-badge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #e3effd;
+  color: #0b4a9e;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.role-badge.is-admin {
+  background: #232f3e;
+  color: #fff;
+}
+
+.admin-title {
+  font-size: 13px;
+  margin: 12px 0 6px;
+}
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 280px;
+}
+
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #555;
+}
+
+.admin-form input,
+.admin-form select {
+  padding: 5px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.admin-status {
+  font-size: 12px;
+  margin: 0;
+}
+
+.admin-status.is-error {
+  color: #c0392b;
+}
+
+.admin-status.is-ok {
+  color: #1d8a3a;
+}
+
+.admin-warning {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: #fff6e0;
+  border: 1px solid #e0c060;
+  font-size: 12px;
+}
+
+.admin-features {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.admin-features label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
