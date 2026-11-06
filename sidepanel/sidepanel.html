@@ -5,9 +5,25 @@
   <title>Warehouse Tote Lookup Assistant</title>
   <link rel="stylesheet" href="sidepanel.css" />
 </head>
-<body>
+<body class="locked">
+  <section id="login-screen">
+    <form id="login-form">
+      <h1>Tote Lookup</h1>
+      <p class="subtitle">Devam etmek için şifrenizi girin.</p>
+      <input id="login-password" type="password" autocomplete="off" placeholder="Şifre" required autofocus />
+      <button type="submit">Giriş</button>
+      <p id="login-error" class="login-error" hidden></p>
+    </form>
+  </section>
+
   <header>
-    <h1>Tote Lookup</h1>
+    <div class="header-row">
+      <h1>Tote Lookup</h1>
+      <span class="session-info">
+        <span id="session-role" class="role-badge"></span>
+        <button id="logout-button" type="button" class="btn-secondary">Çıkış</button>
+      </span>
+    </div>
     <p class="subtitle">Salt okunur görüntüleme aracı - envanterde değişiklik yapmaz.</p>
   </header>
 
@@ -16,6 +32,8 @@
     <button class="tab" type="button" role="tab" data-tab="report">Rapor</button>
     <button class="tab" type="button" role="tab" data-tab="barcode">Barkod</button>
     <button class="tab" type="button" role="tab" data-tab="stowmap">StowMap</button>
+    <button class="tab" type="button" role="tab" data-tab="rozet">Rozet <span id="rozet-tab-count" class="tab-count" hidden></span></button>
+    <button class="tab" type="button" role="tab" data-tab="admin">Yönetim</button>
   </nav>
 
   <section id="tab-lookup" class="tab-panel">
@@ -184,11 +202,78 @@
     <section id="stowmap-result" aria-live="polite"></section>
   </section>
 
+  <section id="tab-rozet" class="tab-panel" hidden>
+    <div class="rozet-controls">
+      <label class="checkbox-label"><input id="rozet-auto" type="checkbox" /> Otomatik tarama</label>
+      <label class="checkbox-label">her
+        <select id="rozet-interval"></select> dk
+      </label>
+      <label class="checkbox-label"><input id="rozet-notify" type="checkbox" /> Bildirim</label>
+      <button id="rozet-scan-button" type="button">Şimdi Tara</button>
+    </div>
+    <p id="rozet-scan-status" class="rozet-hint" aria-live="polite"></p>
+
+    <div id="rozet-summary-wrapper" class="rozet-table-wrapper">
+      <table id="rozet-summary" class="rozet-table">
+        <thead>
+          <tr>
+            <th>İsim</th>
+            <th>Kullanıcı</th>
+            <th title="Hatalı stow edilen toplam adet">Hatalı</th>
+            <th title="Henüz toplanmamış adet">Açık</th>
+            <th title="Toplanıp çözüldü işaretlenen adet">Çözüldü</th>
+            <th title="5 ve üstü hataya ulaşan tote + ürün sayısı">Rozet</th>
+            <th title="Tamamı çözülen rozet olayı">Rozet çözüldü</th>
+          </tr>
+        </thead>
+        <tbody id="rozet-summary-body"></tbody>
+        <tfoot id="rozet-summary-foot"></tfoot>
+      </table>
+    </div>
+
+    <div class="rozet-list-bar">
+      <label class="checkbox-label"><input id="rozet-open-only" type="checkbox" checked /> Sadece açıkları göster</label>
+      <span class="rozet-list-actions">
+        <button id="rozet-clear-resolved" type="button" class="btn-secondary">Çözülenleri sil</button>
+        <button id="rozet-clear-all" type="button" class="btn-danger">Tümünü sil</button>
+      </span>
+    </div>
+    <div id="rozet-list"></div>
+  </section>
+
+  <section id="tab-admin" class="tab-panel" hidden>
+    <p id="admin-default-warning" class="admin-warning" hidden></p>
+
+    <h2 class="admin-title">Şifre değiştir</h2>
+    <form id="admin-password-form" class="admin-form">
+      <label>Profil
+        <select id="admin-role"></select>
+      </label>
+      <label id="admin-current-label" hidden>Mevcut admin şifresi
+        <input id="admin-current" type="password" autocomplete="off" />
+      </label>
+      <label>Yeni şifre
+        <input id="admin-new" type="password" autocomplete="off" required />
+      </label>
+      <label>Yeni şifre (tekrar)
+        <input id="admin-repeat" type="password" autocomplete="off" required />
+      </label>
+      <button type="submit">Kaydet</button>
+      <p id="admin-password-status" class="admin-status" aria-live="polite"></p>
+    </form>
+
+    <h2 class="admin-title">Temel profilde açık özellikler</h2>
+    <p class="rozet-hint">Tote Lookup her profilde açıktır. Tam ve Admin profilleri her şeyi görür.</p>
+    <div id="admin-features" class="admin-features"></div>
+  </section>
+
   <div id="toast" role="status" hidden></div>
 
   <script type="module" src="sidepanel.js"></script>
   <script type="module" src="reportTab.js"></script>
   <script type="module" src="barcodeTab.js"></script>
   <script type="module" src="stowMapTab.js"></script>
+  <script type="module" src="rozetTab.js"></script>
+  <script type="module" src="accessUi.js"></script>
 </body>
 </html>

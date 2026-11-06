@@ -5,6 +5,8 @@ import {
   findCandidates,
   parseAisleSpec,
   parseBinId,
+  isStowablePosition,
+  occupancyPercent,
   parseStowMapCsv,
   summarizeBins,
 } from '../shared/stowMap.js';
@@ -108,11 +110,38 @@ describe('summarizeBins', () => {
 
   it('counts bins with room per shelf, aisle and the selected shelves', () => {
     const summary = summarizeBins(bins, { 'P-1-A206C100': { added: 1 } }, { tower: 'A', shelves: ['B'] });
-    expect(summary.selection).toEqual({ total: 2, available: 1, freeSlots: 5, locked: 0 });
+    // B: 1 + 6 of 12 slots used; C: locked bin left out, 5 of 6 used.
+    expect(summary.selection).toEqual({
+      total: 2, available: 1, freeSlots: 5, locked: 0, used: 7, capacity: 12, occupancy: 58.3,
+    });
     expect(summary.byShelf).toEqual([
-      { key: 'B', total: 2, available: 1, freeSlots: 5, locked: 0 },
-      { key: 'C', total: 2, available: 1, freeSlots: 1, locked: 1 },
+      { key: 'B', total: 2, available: 1, freeSlots: 5, locked: 0, used: 7, capacity: 12, occupancy: 58.3 },
+      { key: 'C', total: 2, available: 1, freeSlots: 1, locked: 1, used: 5, capacity: 6, occupancy: 83.3 },
     ]);
     expect(summary.byAisle.map((g) => [g.key, g.available])).toEqual([[205, 1], [206, 1]]);
+  });
+});
+
+describe('floor 2 / 3 tower A start at position 110', () => {
+  const bins = parseStowMapCsv(
+    [HEADER, line('P-2-A200A100'), line('P-2-A200A109'), line('P-2-A200A110'), line('P-2-B200A100')].join('\n')
+  ).floors['2'].map(expandBin);
+
+  it('leaves positions below 110 out of suggestions and counts', () => {
+    expect(findCandidates(bins, {}, { tower: 'A' }).map((b) => b.id)).toEqual(['P-2-A200A110']);
+    expect(summarizeBins(bins, {}, { tower: 'A' }).selection.total).toBe(1);
+  });
+
+  it('keeps other towers and floor 1 as they are', () => {
+    expect(findCandidates(bins, {}, { tower: 'B' }).map((b) => b.id)).toEqual(['P-2-B200A100']);
+    expect(isStowablePosition({ floor: '1', tower: 'A', position: 100 })).toBe(true);
+    expect(isStowablePosition({ floor: '3', tower: 'A', position: 105 })).toBe(false);
+  });
+});
+
+describe('occupancyPercent', () => {
+  it('rounds to one decimal and handles empty capacity', () => {
+    expect(occupancyPercent(1, 3)).toBe(33.3);
+    expect(occupancyPercent(0, 0)).toBeNull();
   });
 });

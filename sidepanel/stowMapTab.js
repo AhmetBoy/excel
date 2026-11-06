@@ -220,17 +220,30 @@ function renderSuggestion(bin, total) {
 }
 
 const fmt = (n) => n.toLocaleString('tr-TR');
+const fmtPercent = (p) => (p === null ? '-' : `%${p.toLocaleString('tr-TR')}`);
+
+// Occupancy colors: green = plenty of room, yellow = filling up, red = nearly full.
+function occupancyClass(percent) {
+  if (percent === null) return null;
+  if (percent >= 90) return 'occ-high';
+  if (percent >= 70) return 'occ-mid';
+  return 'occ-low';
+}
 
 function detailTable(title, groups, { highlight = null } = {}) {
   const table = el('table', 'stowmap-detail-table');
   const head = el('tr');
-  for (const label of [title, 'Boş yeri olan', 'Toplam', 'Boş ASIN yeri', 'Kilitli']) head.append(el('th', null, label));
+  for (const label of [title, 'Doluluk', 'Boş yeri olan', 'Toplam', 'Boş ASIN yeri', 'Kilitli']) head.append(el('th', null, label));
   table.append(el('thead'));
   table.tHead.append(head);
   const body = el('tbody');
   for (const g of groups) {
     const tr = el('tr', highlight?.has(String(g.key)) ? 'is-selected' : null);
-    for (const value of [g.key, fmt(g.available), fmt(g.total), fmt(g.freeSlots), fmt(g.locked)]) {
+    tr.append(el('td', null, String(g.key)));
+    const occupancy = el('td', occupancyClass(g.occupancy), fmtPercent(g.occupancy));
+    occupancy.title = `${fmt(g.used)} / ${fmt(g.capacity)} ASIN yeri dolu`;
+    tr.append(occupancy);
+    for (const value of [fmt(g.available), fmt(g.total), fmt(g.freeSlots), fmt(g.locked)]) {
       tr.append(el('td', null, String(value)));
     }
     body.append(tr);
@@ -267,7 +280,8 @@ function renderDetail(criteria, aisles) {
     el(
       'div',
       'stowmap-detail-totals',
-      `Toplam ${fmt(s.total)} lokasyon · ${fmt(s.available)} boş yeri olan · ` +
+      `Doluluk ${fmtPercent(s.occupancy)} (${fmt(s.used)} / ${fmt(s.capacity)} ASIN yeri) · ` +
+        `Toplam ${fmt(s.total)} lokasyon · ${fmt(s.available)} boş yeri olan · ` +
         `${fmt(s.total - s.available - s.locked)} dolu · ${fmt(s.locked)} kilitli`
     ),
   ];

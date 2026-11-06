@@ -17,6 +17,8 @@ const tabPanels = {
   report: document.getElementById('tab-report'),
   barcode: document.getElementById('tab-barcode'),
   stowmap: document.getElementById('tab-stowmap'),
+  rozet: document.getElementById('tab-rozet'),
+  admin: document.getElementById('tab-admin'),
 };
 
 const form = document.getElementById('report-form');
