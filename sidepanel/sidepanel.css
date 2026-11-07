@@ -1395,3 +1395,123 @@ body.locked #login-screen {
   background: #f5f5f5;
   z-index: 4;
 }
+
+/* Associate lookup: last stow + idle gaps (sidepanel/stowActivity.js) */
+.stow-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 2px solid #dde1e6;
+  padding-top: 8px;
+}
+
+.stow-activity-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.product-image.large {
+  flex-basis: 110px;
+  height: 110px;
+}
+
+.product-image.small {
+  flex: 0 0 44px;
+  height: 44px;
+}
+
+.last-stow-ago {
+  font-size: 15px;
+}
+
+.last-stow-bin {
+  font-weight: 700;
+  font-size: 13px;
+  margin: 2px 0;
+}
+
+.badge-failed {
+  background: #c0392b;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.recent-stows summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.recent-stow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px dashed #eee;
+}
+
+.idle-gaps {
+  border: 1px solid #dde1e6;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.idle-gaps-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.gap-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.gap-picker .active {
+  background: #232f3e;
+  color: #fff;
+}
+
+.idle-total {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.gap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gap-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 6px;
+  border-left: 4px solid #f1c40f;
+  margin-bottom: 2px;
+  background: #fafafa;
+}
+
+.gap-list li.gap-mid {
+  border-left-color: #e67e22;
+}
+
+.gap-list li.gap-high {
+  border-left-color: #c0392b;
+}
+
+.gap-range {
+  font-variant-numeric: tabular-nums;
+  min-width: 96px;
+}
+
+.gap-kind {
+  color: #777;
+  font-size: 11px;
+}

@@ -12,6 +12,9 @@ import { hasMorePages } from '../shared/parsers/containerHierarchyParser.js';
 import { analyzeStowErrors, buildHistoryDateFields } from '../shared/stowErrors.js';
 import { LOCATION_HISTORY_DAYS } from '../shared/locationStows.js';
 import { startRozetWatch } from './rozetScanner.js';
+import { extractStows, RECENT_STOW_COUNT, USER_STOW_HISTORY_DAYS } from '../shared/stowActivity.js';
+import { reachedCutoff } from '../shared/rozetWatch.js';
+import { shiftOf } from '../shared/shifts.js';
 import { isFeatureAllowed } from '../shared/access.js';
 
 // Without this, clicking the toolbar icon does nothing because there is
@@ -163,7 +166,7 @@ async function resolveProducts(asins) {
     if (response.status !== 'ok') return { asin, highValue: null, imageUrl: null, status: response.status };
     const parsed = await parseViaOffscreen('PARSE_PRODUCT_HTML', response.html);
     if (!parsed.found) return { asin, highValue: null, imageUrl: null, status: 'not_found' };
-    return { asin, highValue: parsed.highValue, imageUrl: parsed.imageUrl, status: 'ok' };
+    return { asin, highValue: parsed.highValue, imageUrl: parsed.imageUrl, title: parsed.title ?? null, status: 'ok' };
   });
 
   const failed = matches.filter((m) => m.status !== 'ok');
@@ -312,7 +315,50 @@ async function resolveInventoryHistory(scannableId) {
  *
  * @param {{ login: string, query: string }} params
  */
+/**
+ * The associate's stows from Inventory History searched by bare login:
+ * every stow of the current shift (for idle gaps) plus the newest ones
+ * with product images. Pages until the shift start is passed and at least
+ * one stow was seen, so a quiet shift still shows the last stow before it.
+ */
+async function resolveUserStows(login) {
+  const now = new Date();
+  const shift = shiftOf(now);
+  const shiftStartMs = shift.startsAt.getTime();
+  const result = await fetchPagedSection(
+    'inventory-history',
+    { s: login, ...buildHistoryDateFields(now, USER_STOW_HISTORY_DAYS) },
+    'PARSE_INVENTORY_HISTORY_HTML',
+    'records',
+    {
+      stopAfter: (items) =>
+        reachedCutoff(items, shiftStartMs) && extractStows(items, login).length > 0,
+    }
+  );
+
+  const stows = extractStows(result.items, login);
+  const recent = stows.slice(0, RECENT_STOW_COUNT);
+  const asins = [...new Set(recent.map((s) => s.asin).filter(Boolean))];
+  const products = asins.length > 0 ? await resolveProducts(asins) : { matches: [] };
+  const productInfo = Object.fromEntries(
+    products.matches.map((m) => [m.asin, { imageUrl: m.imageUrl, highValue: m.highValue, title: m.title ?? null }])
+  );
+
+  return {
+    status: result.status,
+    checkedAt: now.toISOString(),
+    shiftStart: shift.startsAt.toISOString(),
+    shiftLabel: shift.label,
+    shiftStows: stows.filter((s) => s.timeMs >= shiftStartMs).map((s) => s.timeMs),
+    recent: recent.map((s) => ({ ...s, ...(productInfo[s.asin] ?? {}) })),
+  };
+}
+
 async function lookupUser({ login, query }) {
+  const stowActivityPromise = resolveUserStows(login).catch((error) => ({
+    status: 'error',
+    message: String(error?.message ?? error),
+  }));
   const hierarchy = await resolveContainerHierarchy(query);
   const containers = await mapWithConcurrency(
     hierarchy.children,
@@ -342,7 +388,8 @@ async function lookupUser({ login, query }) {
   );
   const binInventory = Object.fromEntries(errorBins.map((bin, i) => [bin, binResults[i]]));
 
-  return { login, query, status: hierarchy.status, path: hierarchy.path, containers, binInventory };
+  const stowActivity = await stowActivityPromise;
+  return { login, query, status: hierarchy.status, path: hierarchy.path, containers, binInventory, stowActivity };
 }
 
 /**

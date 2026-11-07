@@ -3,6 +3,7 @@ import { describeSourceStatus } from '../shared/resultsView.js';
 import { countVariety, sumQuantity } from '../shared/toteChecks.js';
 import { HISTORY_DAYS, analyzeStowErrors, systemQuantityInBin } from '../shared/stowErrors.js';
 import { createBarcodeElement } from './barcodeDom.js';
+import { renderStowActivity } from './stowActivity.js';
 
 const INVENTORY_COLUMNS = [
   { key: 'asin', label: 'ASIN' },
@@ -166,5 +167,8 @@ export function renderUserResults(target, response, onOpenContainer) {
     grid.appendChild(containerCard(container, analyses[index], response.binInventory, onOpenContainer));
   });
 
-  target.replaceChildren(summary, grid);
+  const activity = el('section');
+  renderStowActivity(activity, response.stowActivity);
+
+  target.replaceChildren(summary, grid, activity);
 }
