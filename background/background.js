@@ -4,7 +4,7 @@ import { fetchInventoryHtml } from './services/inventoryService.js';
 import { fetchPandashRaw } from './services/pandashService.js';
 import { fetchQtDatelotForTote } from './services/qtService.js';
 import { fetchAtlasReportRaw } from './services/atlasService.js';
-import { parseAtlasReport } from '../shared/parsers/atlasReportParser.js';
+import { parseAtlasProcessReports } from '../shared/parsers/atlasReportParser.js';
 import { fetchFcResearchSection, fetchFcResearchSectionMore } from './services/fcResearchService.js';
 import { fetchSidelineItem } from './services/sidelineService.js';
 import { parseSidelineResponse } from '../shared/parsers/sidelineParser.js';
@@ -346,23 +346,24 @@ async function lookupUser({ login, query }) {
 }
 
 /**
- * Fetches per-associate stow counts (Atlas "Opportunities") for one time range.
+ * Per-associate counts (Atlas "Opportunities") of every process path of
+ * one department for one time range.
  *
- * @param {{ warehouseId: string, queryHash: string, startTime: number, endTime: number }} params
- * @returns {Promise<{ status: string, rows: object[], message?: string }>}
+ * @param {{ warehouseId: string, queryHash: string, startTime: number, endTime: number, department: string }} params
+ * @returns {Promise<{ status: string, byPath: Record<string, object[]>, paths: string[], message?: string }>}
  */
 async function fetchStowReportRange(params) {
   const response = await fetchAtlasReportRaw(params);
   if (response.status !== 'ok') {
-    return { status: response.status, rows: [], message: response.message };
+    return { status: response.status, byPath: {}, paths: [], message: response.message };
   }
 
-  const parsed = parseAtlasReport(response.text, { warehouseId: params.warehouseId });
-  if (!parsed.valid) return { status: 'unexpected_response', rows: [] };
+  const parsed = parseAtlasProcessReports(response.text, { warehouseId: params.warehouseId });
+  if (!parsed.valid) return { status: 'unexpected_response', byPath: {}, paths: [] };
   if (parsed.errorMessage) {
-    return { status: 'graphql_error', rows: parsed.rows, message: parsed.errorMessage };
+    return { status: 'graphql_error', byPath: parsed.byPath, paths: parsed.paths, message: parsed.errorMessage };
   }
-  return { status: 'ok', rows: parsed.rows };
+  return { status: 'ok', byPath: parsed.byPath, paths: parsed.paths };
 }
 
 // Atlas returns one aggregate per request (timeRanges are summed, not
@@ -371,23 +372,39 @@ async function fetchStowReportRange(params) {
 const MAX_PARALLEL_ATLAS_REQUESTS = 4;
 
 /**
- * @param {{ warehouseId: string, queryHash: string, timeRanges: Array<{startTime: number, endTime: number}> }} params
- * @returns {Promise<{ status: string, slots: Array<{ status: string, rows: object[] }>, message?: string }>}
+ * One request per department and time range; each slot merges the process
+ * paths of all departments (inbound: Stow, Receive; outbound: Pick).
+ *
+ * @param {{ warehouseId: string, queryHash: string, timeRanges: Array<{startTime: number, endTime: number}>, departments?: string[] }} params
+ * @returns {Promise<{ status: string, slots: Array<{ status: string, byPath: Record<string, object[]> }>, paths: string[], message?: string }>}
  */
-async function fetchStowReport({ warehouseId, queryHash, timeRanges }) {
-  const slots = await mapWithConcurrency(timeRanges, MAX_PARALLEL_ATLAS_REQUESTS, (range) =>
-    fetchStowReportRange({ warehouseId, queryHash, ...range })
+async function fetchStowReport({ warehouseId, queryHash, timeRanges, departments = ['inbound'] }) {
+  const jobs = departments.flatMap((department) =>
+    timeRanges.map((range, slotIndex) => ({ department, range, slotIndex }))
+  );
+  const results = await mapWithConcurrency(jobs, MAX_PARALLEL_ATLAS_REQUESTS, (job) =>
+    fetchStowReportRange({ warehouseId, queryHash, department: job.department, ...job.range })
   );
 
-  const failed = slots.filter((s) => s.status !== 'ok');
+  const slots = timeRanges.map(() => ({ status: 'ok', byPath: {} }));
+  const paths = new Set();
+  results.forEach((result, i) => {
+    const slot = slots[jobs[i].slotIndex];
+    Object.assign(slot.byPath, result.byPath);
+    result.paths.forEach((p) => paths.add(p));
+    if (result.status !== 'ok' && slot.status === 'ok') slot.status = result.status;
+  });
+
+  const failed = results.filter((r) => r.status !== 'ok');
   if (failed.length === 0) {
-    const anyRows = slots.some((s) => s.rows.length > 0);
-    return { status: anyRows ? 'ok' : 'no_data', slots };
+    const anyRows = slots.some((s) => Object.values(s.byPath).some((rows) => rows.length > 0));
+    return { status: anyRows ? 'ok' : 'no_data', slots, paths: [...paths] };
   }
   return {
-    status: failed.length === slots.length ? failed[0].status : 'partial_failure',
+    status: failed.length === results.length ? failed[0].status : 'partial_failure',
     message: failed[0].message,
     slots,
+    paths: [...paths],
   };
 }
 

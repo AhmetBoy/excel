@@ -1295,3 +1295,103 @@ body.locked #login-screen {
   align-items: center;
   gap: 6px;
 }
+
+/* Rapor: processes, views, frozen header / user column / totals */
+.report-processes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.report-processes > span:first-child {
+  font-size: 11px;
+  color: #555;
+}
+
+#report-processes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#report-processes .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.report-note {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: #fff6e0;
+  border: 1px solid #e0c060;
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+.report-views:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.view-button {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.view-button.active {
+  background: #232f3e;
+  border-color: #232f3e;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* The table scrolls inside its own box so the header, the user column,
+   the Toplam column and the Toplam row stay visible. */
+#report-wrapper {
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  border: 1px solid #ddd;
+}
+
+#report-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+#report-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+#report-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  border-top: 2px solid #bbb;
+}
+
+#report-table .total-col {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: #fff;
+}
+
+#report-table td.total-col.top {
+  background: #c8f0c8;
+}
+
+#report-table thead th.total-col,
+#report-table tfoot td.total-col,
+#report-table thead th.sticky-col,
+#report-table tfoot td.sticky-col {
+  background: #f5f5f5;
+  z-index: 4;
+}

@@ -1,7 +1,9 @@
 // VERIFIED from a real Atlas /graphql response (getReportingByWarehouseId):
 // per-associate rows live under rawReports[processPath].processLevelReport,
 // each with aggregationField "<warehouseId>-<login>" and a defectMap of
-// { k, v } pairs where k === 'Opportunities' is the number of stows.
+// { k, v } pairs where k === 'Opportunities' is the unit count (stows,
+// receives, ...). The inbound department holds Stow and Receive; Pick is
+// asked for with department "outbound".
 const OPPORTUNITIES_KEY = 'Opportunities';
 
 function loginFromAggregationField(aggregationField, warehouseId) {
@@ -21,35 +23,11 @@ function opportunitiesFromDefectMap(defectMap) {
   return Number.isFinite(value) ? value : 0;
 }
 
-/**
- * Extracts per-associate opportunity (stow) counts for one process path
- * from an Atlas reporting response. Rows for the same login are summed
- * rather than shown twice, and sorted by opportunities descending.
- *
- * @param {string|object} raw - response body text or parsed JSON
- * @param {{ processPath?: string, warehouseId?: string }} [options]
- * @returns {{ rows: Array<{login: string, managerId: string|null, opportunities: number, totalDefects: number}>, errorMessage: string|null, valid: boolean }}
- */
-export function parseAtlasReport(raw, { processPath = 'Stow', warehouseId } = {}) {
-  let data;
-  try {
-    data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  } catch {
-    return { rows: [], errorMessage: null, valid: false };
-  }
-
-  if (Array.isArray(data?.errors) && data.errors.length > 0) {
-    const message = data.errors.map((e) => e?.message).filter(Boolean).join('; ');
-    return { rows: [], errorMessage: message || 'GraphQL error', valid: true };
-  }
-
-  const report = data?.data?.getReportingByWarehouseId;
-  if (!report) return { rows: [], errorMessage: null, valid: false };
-
-  const rawReport = (report.rawReports ?? []).find((r) => r?.processPath === processPath);
+/** Sums the items per login, sorted by opportunities descending. */
+function rowsOfItems(items, warehouseId) {
   const byLogin = new Map();
 
-  for (const item of rawReport?.processLevelReport ?? []) {
+  for (const item of items) {
     const login = loginFromAggregationField(item?.aggregationField, warehouseId);
     if (!login) continue;
 
@@ -70,11 +48,69 @@ export function parseAtlasReport(raw, { processPath = 'Stow', warehouseId } = {}
     }
   }
 
-  const rows = [...byLogin.values()].sort(
+  return [...byLogin.values()].sort(
     (a, b) => b.opportunities - a.opportunities || a.login.localeCompare(b.login)
   );
+}
 
-  return { rows, errorMessage: report.rawReportsErrorMessage ?? null, valid: true };
+/**
+ * Per-associate opportunity counts for every process path in an Atlas
+ * reporting response. Rows for the same login within a path are summed.
+ *
+ * @param {string|object} raw - response body text or parsed JSON
+ * @param {{ warehouseId?: string }} [options]
+ * @returns {{ byPath: Record<string, Array<{login: string, managerId: string|null, opportunities: number, totalDefects: number}>>,
+ *   paths: string[], errorMessage: string|null, valid: boolean }}
+ */
+export function parseAtlasProcessReports(raw, { warehouseId } = {}) {
+  let data;
+  try {
+    data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return { byPath: {}, paths: [], errorMessage: null, valid: false };
+  }
+
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    const message = data.errors.map((e) => e?.message).filter(Boolean).join('; ');
+    return { byPath: {}, paths: [], errorMessage: message || 'GraphQL error', valid: true };
+  }
+
+  const report = data?.data?.getReportingByWarehouseId;
+  if (!report) return { byPath: {}, paths: [], errorMessage: null, valid: false };
+
+  // A path listed twice is merged before summing.
+  const itemsByPath = new Map();
+  for (const rawReport of report.rawReports ?? []) {
+    const path = rawReport?.processPath;
+    if (!path) continue;
+    if (!itemsByPath.has(path)) itemsByPath.set(path, []);
+    itemsByPath.get(path).push(...(rawReport.processLevelReport ?? []));
+  }
+
+  const byPath = {};
+  for (const [path, items] of itemsByPath) byPath[path] = rowsOfItems(items, warehouseId);
+  return {
+    byPath,
+    paths: Object.keys(byPath),
+    errorMessage: report.rawReportsErrorMessage ?? null,
+    valid: true,
+  };
+}
+
+/**
+ * Per-associate opportunity counts of one process path (default Stow).
+ *
+ * @param {string|object} raw - response body text or parsed JSON
+ * @param {{ processPath?: string, warehouseId?: string }} [options]
+ * @returns {{ rows: Array<{login: string, managerId: string|null, opportunities: number, totalDefects: number}>, errorMessage: string|null, valid: boolean }}
+ */
+export function parseAtlasReport(raw, { processPath = 'Stow', warehouseId } = {}) {
+  const parsed = parseAtlasProcessReports(raw, { warehouseId });
+  return {
+    rows: parsed.byPath[processPath] ?? [],
+    errorMessage: parsed.errorMessage,
+    valid: parsed.valid,
+  };
 }
 
 /**

@@ -113,6 +113,10 @@
           Saatlik verileri getir
         </label>
       </div>
+      <div class="report-processes">
+        <span>Süreç:</span>
+        <span id="report-processes"></span>
+      </div>
       <details id="report-users">
         <summary id="report-users-summary">Kullanıcı listesi</summary>
         <textarea
@@ -132,8 +136,11 @@
     </form>
 
     <section id="report-status" aria-live="polite"></section>
+    <p id="report-note" class="report-note" hidden></p>
 
     <div id="report-loading" hidden>Rapor getiriliyor...</div>
+
+    <div id="report-views" class="report-views" hidden></div>
 
     <section id="report-filter-bar" hidden>
       <input id="report-filter-input" type="text" placeholder="Kullanıcı veya manager'a göre filtrele" />

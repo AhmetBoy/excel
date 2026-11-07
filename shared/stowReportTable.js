@@ -1,5 +1,42 @@
 const HOUR_SECONDS = 3600;
 
+// Report processes. Atlas answers per department: inbound holds Stow and
+// Receive, outbound holds Pick. `paths` are the processPath names to read
+// (case-insensitive); Pick's name is not verified against live data yet.
+export const PROCESSES = [
+  { id: 'stow', label: 'Stow', department: 'inbound', paths: ['Stow'] },
+  { id: 'receive', label: 'Receive', department: 'inbound', paths: ['Receive'] },
+  { id: 'pick', label: 'Pick', department: 'outbound', paths: ['Pick'] },
+];
+export const DEFAULT_PROCESSES = ['stow'];
+
+export function processById(id) {
+  return PROCESSES.find((p) => p.id === id) ?? null;
+}
+
+/** Departments Atlas has to be asked for the chosen processes. */
+export function departmentsFor(processIds) {
+  return [...new Set(processIds.map((id) => processById(id)?.department).filter(Boolean))];
+}
+
+function pathKeysFor(process, byPath) {
+  const wanted = new Set(process.paths.map((p) => p.toLowerCase()));
+  return Object.keys(byPath ?? {}).filter((key) => wanted.has(key.toLowerCase()));
+}
+
+/** One row list per slot for a process (its paths merged). */
+export function slotRowsForProcess(slots, process) {
+  return slots.map((slot) => pathKeysFor(process, slot?.byPath).flatMap((key) => slot.byPath[key]));
+}
+
+/** Processes Atlas returned no section for (none of their paths appear). */
+export function missingProcesses(processIds, paths) {
+  const seen = Object.fromEntries((paths ?? []).map((p) => [p, []]));
+  return processIds
+    .map(processById)
+    .filter((process) => process && pathKeysFor(process, seen).length === 0);
+}
+
 // Shown in the İsim column when the user list gives no name for a login.
 export const UNKNOWN_NAME = 'Bilinmiyor';
 
@@ -125,16 +162,22 @@ export function buildStowTable(slotRows, { users = [], names = {} } = {}) {
  * @param {{ HEADER: number, TOP: number, FOOTER: number, BOLD: number }} styles
  * @returns {Array<Array<{ v: string|number|null, s?: number }>>}
  */
-export function buildStowSheetRows({ table, rows, slots, hourly, title }, styles) {
+export function buildStowSheetRows(
+  { table, rows, slots, hourly, title, columns = null, valueLabel = 'Stow (Opportunities)' },
+  styles
+) {
   const isTop = (value, max) => value > 0 && value === max;
   const header = (v) => ({ v, s: styles.HEADER });
   const footer = (v) => ({ v, s: styles.FOOTER });
+  // `columns` (labels) for the combined view; hourly reports use the slots.
+  const labels = columns ?? (hourly ? slots.map(formatSlotLabel) : null);
+  hourly = Boolean(labels);
 
   const headerRow = [header('#'), header('Kullanıcı'), header('İsim')];
   if (hourly) {
-    headerRow.push(...slots.map((slot) => header(formatSlotLabel(slot))), header('Toplam'));
+    headerRow.push(...labels.map(header), header('Toplam'));
   } else {
-    headerRow.push(header('Manager'), header('Stow (Opportunities)'));
+    headerRow.push(header('Manager'), header(valueLabel));
   }
 
   const bodyRows = rows.map((row, index) => {
@@ -152,7 +195,7 @@ export function buildStowSheetRows({ table, rows, slots, hourly, title }, styles
 
   const footerRow = [footer(null), footer(`Toplam (${rows.length} kişi)`), footer(null)];
   if (hourly) {
-    slots.forEach((_, i) => footerRow.push(footer(rows.reduce((sum, r) => sum + r.values[i], 0))));
+    labels.forEach((_, i) => footerRow.push(footer(rows.reduce((sum, r) => sum + r.values[i], 0))));
   } else {
     footerRow.push(footer(null));
   }
@@ -171,4 +214,40 @@ export function formatSlotLabel({ startTime, endTime }) {
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
   return `${fmt(startTime)}-${fmt(endTime)}`;
+}
+
+/**
+ * The "Toplam" view: one column per process with each person's total for
+ * the whole range, plus an overall total. Same shape as buildStowTable so
+ * the panel and Excel export render it like an hourly table.
+ *
+ * @param {Record<string, ReturnType<typeof buildStowTable>>} tables - by process id
+ * @param {string[]} processIds - column order
+ */
+export function buildCombinedTable(tables, processIds) {
+  const byLogin = new Map();
+  processIds.forEach((id, column) => {
+    for (const row of tables[id]?.rows ?? []) {
+      const key = row.login.toLowerCase();
+      let entry = byLogin.get(key);
+      if (!entry) {
+        entry = { login: row.login, name: row.name, managerId: row.managerId, values: new Array(processIds.length).fill(0), total: 0 };
+        byLogin.set(key, entry);
+      }
+      entry.name ??= row.name;
+      entry.managerId ??= row.managerId;
+      entry.values[column] += row.total;
+      entry.total += row.total;
+    }
+  });
+
+  const rows = [...byLogin.values()].sort((a, b) => b.total - a.total || a.login.localeCompare(b.login));
+  const columnTotals = processIds.map((_, i) => rows.reduce((sum, r) => sum + r.values[i], 0));
+  return {
+    rows,
+    columnTotals,
+    grandTotal: rows.reduce((sum, r) => sum + r.total, 0),
+    columnMax: processIds.map((_, i) => maxOf(rows.map((r) => r.values[i]))),
+    totalMax: maxOf(rows.map((r) => r.total)),
+  };
 }

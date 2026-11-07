@@ -5,7 +5,6 @@ import { classifyResponseStatus, withErrorHandling } from './errorHandler.js';
 // sha256 hash) plus variables { warehouseId, department, timeRanges }.
 const ATLAS_GRAPHQL_URL = 'https://atlas.na.aftx.amazonoperations.app/graphql';
 
-const DEPARTMENT = 'inbound';
 
 /**
  * Fetches the raw Atlas reporting response for one warehouse and time range.
@@ -15,10 +14,11 @@ const DEPARTMENT = 'inbound';
  * not a credential. It only changes when Atlas ships a new version of that
  * query, so it's user-configurable in the Rapor tab rather than hardcoded.
  *
- * @param {{ warehouseId: string, startTime: number, endTime: number, queryHash: string }} params - times in Unix seconds
+ * @param {{ warehouseId: string, startTime: number, endTime: number, queryHash: string, department?: string }} params
+ *   times in Unix seconds; department "inbound" (Stow, Receive) or "outbound" (Pick)
  * @returns {Promise<{ status: string, text?: string, httpStatus?: number }>}
  */
-export function fetchAtlasReportRaw({ warehouseId, startTime, endTime, queryHash }) {
+export function fetchAtlasReportRaw({ warehouseId, startTime, endTime, queryHash, department = 'inbound' }) {
   return withErrorHandling('atlas', async () => {
     if (!queryHash) {
       return { status: 'config_missing' };
@@ -31,7 +31,7 @@ export function fetchAtlasReportRaw({ warehouseId, startTime, endTime, queryHash
       body: JSON.stringify({
         variables: {
           warehouseId,
-          department: DEPARTMENT,
+          department,
           timeRanges: [{ startTime, endTime }],
         },
         extensions: {

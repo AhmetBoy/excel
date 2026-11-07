@@ -1,12 +1,19 @@
 import { buildTimeRange } from '../shared/parsers/atlasReportParser.js';
 import { describeSourceStatus } from '../shared/resultsView.js';
 import {
+  buildCombinedTable,
   buildHourlySlots,
   buildStowSheetRows,
   buildStowTable,
+  DEFAULT_PROCESSES,
+  departmentsFor,
   formatSlotLabel,
+  missingProcesses,
   parseUserEntries,
   parseUserList,
+  processById,
+  PROCESSES,
+  slotRowsForProcess,
   UNKNOWN_NAME,
 } from '../shared/stowReportTable.js';
 import { buildXlsx, XLSX_STYLE } from '../shared/xlsxWriter.js';
@@ -42,6 +49,11 @@ const wrapperEl = document.getElementById('report-wrapper');
 const headEl = document.getElementById('report-head');
 const bodyEl = document.getElementById('report-body');
 const footEl = document.getElementById('report-foot');
+const processesEl = document.getElementById('report-processes');
+const viewsEl = document.getElementById('report-views');
+const noteEl = document.getElementById('report-note');
+
+const COMBINED_VIEW = 'toplam';
 
 const SETTINGS_STORAGE_KEY = 'stowReportSettings';
 const DEFAULT_SETTINGS = {
@@ -51,9 +63,26 @@ const DEFAULT_SETTINGS = {
   queryHash: '',
   hourly: false,
   users: '',
+  processes: DEFAULT_PROCESSES,
 };
 
-// { table, slots, hourly, warehouseId, range } from the last successful fetch
+for (const process of PROCESSES) {
+  const label = document.createElement('label');
+  label.className = 'checkbox-label';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.value = process.id;
+  box.addEventListener('change', saveSettings);
+  label.append(box, document.createTextNode(` ${process.label}`));
+  processesEl.append(label);
+}
+
+function selectedProcesses() {
+  return [...processesEl.querySelectorAll('input:checked')].map((box) => box.value);
+}
+
+// { tables, combined, processes, view, slots, hourly, warehouseId, range }
+// from the last successful fetch
 let lastReport = null;
 
 function switchTab(name) {
@@ -94,6 +123,8 @@ async function loadSettings() {
   hourlyCheckbox.checked = settings.hourly;
   usersInput.value = settings.users;
   queryHashInput.value = settings.queryHash;
+  const processes = new Set(settings.processes);
+  for (const box of processesEl.querySelectorAll('input')) box.checked = processes.has(box.value);
   // Always editable; only expanded when the hash is missing or Atlas rejects it.
   settingsEl.open = !settings.queryHash;
   updateUsersSummary();
@@ -108,6 +139,7 @@ function saveSettings() {
       queryHash: queryHashInput.value.trim(),
       hourly: hourlyCheckbox.checked,
       users: usersInput.value,
+      processes: selectedProcesses(),
     },
   });
 }
@@ -129,21 +161,64 @@ function el(tag, text, className) {
 const fmt = (n) => n.toLocaleString('tr-TR');
 const isTop = (value, max) => value > 0 && value === max;
 
-function renderHead({ slots, hourly }) {
+/**
+ * What the table shows now: one process (hourly columns or a single
+ * value) or the combined "Toplam" view (one column per process).
+ * `columns` = value column labels, null for the single-value layout.
+ */
+function currentView() {
+  const { view, tables, combined, processes, slots, hourly } = lastReport;
+  if (view === COMBINED_VIEW) {
+    return {
+      id: COMBINED_VIEW,
+      label: 'Toplam',
+      table: combined,
+      columns: processes.map((id) => processById(id).label),
+    };
+  }
+  const process = processById(view);
+  return {
+    id: process.id,
+    label: process.label,
+    table: tables[view],
+    columns: hourly ? slots.map(formatSlotLabel) : null,
+    valueLabel: `${process.label} (Opportunities)`,
+  };
+}
+
+function renderViews() {
+  const { processes, view } = lastReport;
+  const ids = processes.length > 1 ? [...processes, COMBINED_VIEW] : processes;
+  viewsEl.hidden = ids.length < 2;
+  viewsEl.replaceChildren(
+    ...ids.map((id) => {
+      const button = el('button', id === COMBINED_VIEW ? 'Toplam' : processById(id).label, 'view-button');
+      button.type = 'button';
+      button.classList.toggle('active', id === view);
+      button.addEventListener('click', () => {
+        lastReport.view = id;
+        renderReport();
+      });
+      return button;
+    })
+  );
+}
+
+function renderHead({ columns, valueLabel }) {
   const tr = document.createElement('tr');
   tr.append(el('th', '#'), el('th', 'Kullanıcı', 'sticky-col'), el('th', 'İsim'));
-  if (hourly) {
-    for (const slot of slots) tr.append(el('th', formatSlotLabel(slot), 'num'));
+  if (columns) {
+    for (const label of columns) tr.append(el('th', label, 'num'));
     tr.append(el('th', 'Toplam', 'num total-col'));
   } else {
-    tr.append(el('th', 'Manager'), el('th', 'Stow (Opportunities)', 'num'));
+    tr.append(el('th', 'Manager'), el('th', valueLabel, 'num total-col'));
   }
   headEl.replaceChildren(tr);
 }
 
 function visibleRows() {
   const query = filterInput.value.trim().toLowerCase();
-  const { rows } = lastReport.table;
+  const { rows } = currentView().table;
   return query
     ? rows.filter((r) => `${r.login} ${r.name ?? ''} ${r.managerId ?? ''}`.toLowerCase().includes(query))
     : rows;
@@ -151,11 +226,14 @@ function visibleRows() {
 
 function renderReport() {
   if (!lastReport) return;
-  const { table, slots, hourly } = lastReport;
-  const columnCount = hourly ? slots.length + 4 : 5;
+  const viewInfo = currentView();
+  const { table, columns } = viewInfo;
+  const hourly = Boolean(columns);
+  const columnCount = hourly ? columns.length + 4 : 5;
   const rows = visibleRows();
 
-  renderHead(lastReport);
+  renderViews();
+  renderHead(viewInfo);
 
   if (rows.length === 0) {
     const tr = document.createElement('tr');
@@ -191,7 +269,7 @@ function renderReport() {
   const tr = document.createElement('tr');
   tr.append(el('td', ''), el('td', `Toplam (${rows.length} kişi)`, 'sticky-col'), el('td', ''));
   if (hourly) {
-    slots.forEach((_, i) => {
+    columns.forEach((_, i) => {
       tr.append(el('td', fmt(rows.reduce((sum, r) => sum + r.values[i], 0)), 'num'));
     });
   } else {
@@ -232,6 +310,12 @@ form.addEventListener('submit', async (event) => {
     return;
   }
 
+  const processes = PROCESSES.map((p) => p.id).filter((id) => selectedProcesses().includes(id));
+  if (processes.length === 0) {
+    showStatus('error', 'En az bir süreç seçin (Stow, Receive, Pick)');
+    return;
+  }
+
   const hourly = hourlyCheckbox.checked;
   const slots = hourly ? buildHourlySlots(range) : [range];
   setLoading(true, hourly ? `Rapor getiriliyor (${slots.length} saatlik dilim)...` : undefined);
@@ -239,7 +323,7 @@ form.addEventListener('submit', async (event) => {
   try {
     const response = await chrome.runtime.sendMessage({
       type: 'FETCH_STOW_REPORT',
-      params: { warehouseId, queryHash, timeRanges: slots },
+      params: { warehouseId, queryHash, timeRanges: slots, departments: departmentsFor(processes) },
     });
     if (!response) throw new Error('Arka plan betiğinden yanıt alınamadı.');
 
@@ -248,16 +332,32 @@ form.addEventListener('submit', async (event) => {
       settingsEl.open = true;
     }
 
-    const slotRows = (response.slots ?? []).map((s) => s?.rows ?? []);
     const entries = parseUserEntries(usersInput.value);
-    const table = buildStowTable(slotRows, {
+    const options = {
       users: entries.map((e) => e.login),
       names: Object.fromEntries(entries.map((e) => [e.login, e.name])),
-    });
-    lastReport = { table, slots, hourly, warehouseId, range };
+    };
+    const tables = Object.fromEntries(
+      processes.map((id) => [id, buildStowTable(slotRowsForProcess(response.slots ?? [], processById(id)), options)])
+    );
+    const combined = processes.length > 1 ? buildCombinedTable(tables, processes) : null;
+    const previousView = lastReport?.view;
+    const view = processes.includes(previousView) || (previousView === COMBINED_VIEW && combined)
+      ? previousView
+      : processes[0];
+    lastReport = { tables, combined, processes, view, slots, hourly, warehouseId, range };
 
     showStatus(response.status, response.message);
-    filterBarEl.hidden = table.rows.length === 0;
+    // A process Atlas has no section for: list what it did return, so the
+    // right processPath name can be picked (Pick's is not verified yet).
+    const missing = response.status === 'ok' ? missingProcesses(processes, response.paths) : [];
+    noteEl.hidden = missing.length === 0;
+    noteEl.textContent = missing.length
+      ? `Atlas'ta ${missing.map((p) => p.label).join(', ')} bölümü bulunamadı. Gelen bölümler: ${
+          (response.paths ?? []).join(', ') || 'yok'
+        }`
+      : '';
+    filterBarEl.hidden = Object.values(tables).every((t) => t.rows.length === 0);
     wrapperEl.hidden = false;
     renderReport();
   } catch (error) {
@@ -277,18 +377,29 @@ function formatDateTime(seconds, { forFileName = false } = {}) {
 
 function exportToXlsx() {
   if (!lastReport) return;
-  const { slots, hourly, warehouseId, range } = lastReport;
+  const { warehouseId, range } = lastReport;
+  const viewInfo = currentView();
+  const hourly = Boolean(viewInfo.columns) && viewInfo.id !== COMBINED_VIEW;
 
   const title =
-    `Stow Raporu - ${warehouseId} - ` +
+    `${viewInfo.label} Raporu - ${warehouseId} - ` +
     `${formatDateTime(range.startTime)} / ${formatDateTime(range.endTime)}`;
-  const rows = buildStowSheetRows({ ...lastReport, rows: visibleRows(), title }, XLSX_STYLE);
-  const columnWidths = hourly
-    ? [5, 16, 18, ...slots.map(() => 13), 10]
+  const rows = buildStowSheetRows(
+    {
+      table: viewInfo.table,
+      rows: visibleRows(),
+      columns: viewInfo.columns,
+      valueLabel: viewInfo.valueLabel,
+      title,
+    },
+    XLSX_STYLE
+  );
+  const columnWidths = viewInfo.columns
+    ? [5, 16, 18, ...viewInfo.columns.map(() => 13), 10]
     : [5, 16, 18, 14, 20];
 
   const bytes = buildXlsx({
-    sheetName: hourly ? 'Saatlik Stow' : 'Stow',
+    sheetName: hourly ? `Saatlik ${viewInfo.label}` : viewInfo.label,
     rows,
     columnWidths,
     freeze: { rows: 3, cols: 3 },
@@ -301,7 +412,7 @@ function exportToXlsx() {
   const link = document.createElement('a');
   link.href = url;
   link.download =
-    `stow-raporu_${warehouseId}_${formatDateTime(range.startTime, { forFileName: true })}` +
+    `${viewInfo.id}-raporu_${warehouseId}_${formatDateTime(range.startTime, { forFileName: true })}` +
     `-${formatDateTime(range.endTime, { forFileName: true }).split('_')[1]}` +
     `${hourly ? '_saatlik' : ''}.xlsx`;
   link.click();
