@@ -190,6 +190,9 @@
         <label>Koridor (isteğe bağlı)
           <input id="stowmap-aisles" type="text" placeholder="ör. 215 veya 205-209" autocomplete="off" />
         </label>
+        <label>Sıra (isteğe bağlı)
+          <input id="stowmap-positions" type="text" placeholder="ör. 110-150" autocomplete="off" />
+        </label>
         <label>Dropzone (isteğe bağlı)
           <select id="stowmap-dropzone"></select>
         </label>
@@ -198,8 +201,30 @@
         <span>Bin:</span>
         <span id="stowmap-shelves"></span>
         <label class="checkbox-label"><input id="stowmap-hrv" type="checkbox" /> Sadece HRV alabilen</label>
+        <label class="checkbox-label" title="0/6 gibi hiç ürün atılmamış lokasyonlar önerilmez ve Excel'e yazılmaz"><input id="stowmap-skip-empty" type="checkbox" /> Hiç ürün atılmamış lokasyonları önerme</label>
       </div>
     </form>
+
+    <details id="stowmap-export" hidden>
+      <summary>Excel listeleri</summary>
+      <p class="hint">Yukarıdan bir seçim yapıp bölüm olarak ekleyin; bölümler Excel'de bu sırayla alt alta gelir. Kayıtlı liste her indirmede en son yüklenen CSV'den güncel verilerle oluşturulur.</p>
+      <div class="report-grid">
+        <label>Sıralama
+          <select id="stowmap-export-sort"></select>
+        </label>
+        <label class="checkbox-label"><input id="stowmap-export-available" type="checkbox" checked /> Sadece boş yeri olanlar</label>
+        <button id="stowmap-export-add" type="button">+ Seçimi bölüm olarak ekle</button>
+      </div>
+      <ol id="stowmap-export-sections"></ol>
+      <div class="stowmap-export-actions">
+        <input id="stowmap-export-name" type="text" placeholder="Liste adı (ör. Kat 2 A binleri)" autocomplete="off" />
+        <button id="stowmap-export-save" type="button">Kaydet</button>
+        <button id="stowmap-export-clear" type="button">Temizle</button>
+      </div>
+      <div id="stowmap-export-status" class="hint"></div>
+      <div class="stowmap-next-title">Kayıtlı listeler</div>
+      <ul id="stowmap-export-saved"></ul>
+    </details>
 
     <details id="stowmap-detail" hidden>
       <summary id="stowmap-detail-summary">Detay</summary>

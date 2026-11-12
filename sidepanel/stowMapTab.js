@@ -5,6 +5,7 @@ import {
   parseStowMapCsv,
   summarizeBins,
 } from '../shared/stowMap.js';
+import { initStowMapExport } from './stowMapExportUi.js';
 
 // Storage layout (chrome.storage.local, needs "unlimitedStorage"; a floor is ~2 MB):
 //   stowMap:floor:<n>  -> { fileName, importedAt, bins: stored bin arrays }
@@ -16,7 +17,6 @@ const CRITERIA_KEY = 'stowMap:criteria';
 const floorKey = (floor) => `stowMap:floor:${floor}`;
 const marksKey = (floor) => `stowMap:marks:${floor}`;
 
-const NEXT_COUNT = 5;
 
 const fileInput = document.getElementById('stowmap-file');
 const floorsEl = document.getElementById('stowmap-floors');
@@ -24,13 +24,16 @@ const criteriaForm = document.getElementById('stowmap-criteria');
 const floorSelect = document.getElementById('stowmap-floor');
 const towerSelect = document.getElementById('stowmap-tower');
 const aislesInput = document.getElementById('stowmap-aisles');
+const positionsInput = document.getElementById('stowmap-positions');
 const dropzoneSelect = document.getElementById('stowmap-dropzone');
 const shelvesEl = document.getElementById('stowmap-shelves');
 const hrvInput = document.getElementById('stowmap-hrv');
+const skipEmptyInput = document.getElementById('stowmap-skip-empty');
 const resultEl = document.getElementById('stowmap-result');
 const detailEl = document.getElementById('stowmap-detail');
 const detailSummaryEl = document.getElementById('stowmap-detail-summary');
 const detailBodyEl = document.getElementById('stowmap-detail-body');
+const exportEl = document.getElementById('stowmap-export');
 
 let floorsMeta = {};
 let savedCriteria = {};
@@ -77,6 +80,7 @@ function renderFloors() {
     })
   );
   criteriaForm.hidden = floors.length === 0;
+  exportEl.hidden = floors.length === 0;
 }
 
 function selectedShelves() {
@@ -88,9 +92,11 @@ function readCriteria() {
     floor: floorSelect.value,
     tower: towerSelect.value,
     aisles: aislesInput.value,
+    positions: positionsInput.value,
     dropzone: dropzoneSelect.value,
     shelves: selectedShelves(),
     hrvOnly: hrvInput.checked,
+    skipEmpty: skipEmptyInput.checked,
   };
 }
 
@@ -258,6 +264,7 @@ function renderDetail(criteria, aisles) {
   const summary = summarizeBins(current.bins, current.marks, {
     tower: criteria.tower,
     aisles,
+    positions: parseAisleSpec(criteria.positions),
     dropzone: criteria.dropzone,
     hrvOnly: criteria.hrvOnly,
     shelves: criteria.shelves,
@@ -270,6 +277,7 @@ function renderDetail(criteria, aisles) {
     `Kat ${criteria.floor}`,
     `Tower ${criteria.tower}`,
     criteria.aisles.trim() ? `Koridor ${criteria.aisles.trim()}` : 'tüm koridorlar',
+    criteria.positions.trim() ? `Sıra ${criteria.positions.trim()}` : null,
     criteria.shelves.length > 0 ? `Bin ${criteria.shelves.join(', ')}` : 'tüm binler',
     criteria.dropzone || null,
     criteria.hrvOnly ? 'HRV alabilen' : null,
@@ -294,6 +302,29 @@ function renderDetail(criteria, aisles) {
   detailBodyEl.replaceChildren(...children);
 }
 
+/** Every remaining candidate, in suggestion order, in a scrollable table. */
+function renderNextTable(bins) {
+  const table = el('table', 'stowmap-next-table');
+  const head = el('tr');
+  for (const label of ['#', 'Lokasyon', 'Dolu / Max', 'Bin Type']) head.append(el('th', null, label));
+  table.appendChild(el('thead')).appendChild(head);
+  const body = el('tbody');
+  bins.forEach((bin, index) => {
+    const row = el('tr');
+    row.append(
+      el('td', null, String(index + 2)),
+      el('td', 'bin-id', bin.id),
+      el('td', null, `${bin.effectiveUnique}/${bin.max}`),
+      el('td', null, bin.binType ?? '')
+    );
+    body.append(row);
+  });
+  table.append(body);
+  const wrap = el('div', 'stowmap-next-wrap');
+  wrap.append(table);
+  return wrap;
+}
+
 function render() {
   renderFloors();
   if (!current.floor) {
@@ -307,9 +338,11 @@ function render() {
   const candidates = findCandidates(current.bins, current.marks, {
     tower: criteria.tower,
     aisles: parseAisleSpec(criteria.aisles),
+    positions: parseAisleSpec(criteria.positions),
     shelves: criteria.shelves,
     dropzone: criteria.dropzone,
     hrvOnly: criteria.hrvOnly,
+    skipEmpty: criteria.skipEmpty,
     skip: skipped,
   });
 
@@ -318,13 +351,9 @@ function render() {
     children.push(el('div', 'empty-state', 'Bu seçime uygun boş lokasyon kalmadı.'));
   } else {
     children.push(renderSuggestion(candidates[0], candidates.length));
-    const next = candidates.slice(1, 1 + NEXT_COUNT);
+    const next = candidates.slice(1);
     if (next.length > 0) {
-      const list = el('ul', 'stowmap-next');
-      for (const bin of next) {
-        list.append(el('li', null, `${bin.id} · ${bin.effectiveUnique}/${bin.max} · ${bin.binType}`));
-      }
-      children.push(el('div', 'stowmap-next-title', 'Sıradakiler'), list);
+      children.push(el('div', 'stowmap-next-title', `Sıradakiler (${fmt(next.length)})`), renderNextTable(next));
     }
   }
 
@@ -402,8 +431,8 @@ towerSelect.addEventListener('change', () => {
   render();
 });
 
-for (const input of [aislesInput, dropzoneSelect, hrvInput]) {
-  input.addEventListener(input === aislesInput ? 'input' : 'change', () => {
+for (const input of [aislesInput, positionsInput, dropzoneSelect, hrvInput, skipEmptyInput]) {
+  input.addEventListener(input.type === 'text' ? 'input' : 'change', () => {
     saveCriteria();
     render();
   });
@@ -419,9 +448,21 @@ async function init() {
   floorsMeta = data[FLOORS_KEY] ?? {};
   savedCriteria = data[CRITERIA_KEY] ?? {};
   aislesInput.value = savedCriteria.aisles ?? '';
+  positionsInput.value = savedCriteria.positions ?? '';
   hrvInput.checked = Boolean(savedCriteria.hrvOnly);
+  skipEmptyInput.checked = Boolean(savedCriteria.skipEmpty);
   fillSelect(floorSelect, Object.keys(floorsMeta).sort(), { selected: savedCriteria.floor });
   await selectFloor(floorSelect.value || null);
 }
 
+/** Bins + records of any floor (the selected one is already in memory). */
+async function floorData(floor) {
+  if (floor === current.floor) return { bins: current.bins, marks: current.marks };
+  const data = await chrome.storage.local.get([floorKey(floor), marksKey(floor)]);
+  const stored = data[floorKey(floor)];
+  if (!stored) return null;
+  return { bins: stored.bins.map(expandBin), marks: data[marksKey(floor)] ?? {} };
+}
+
+initStowMapExport({ readCriteria, floorData });
 init();

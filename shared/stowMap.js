@@ -133,15 +133,46 @@ export function parseAisleSpec(text) {
   return ranges.length > 0 ? ranges : null;
 }
 
-// Lowest real position per floor + tower. On floors 2 and 3 tower A the
-// shelves start at 110 (P-2-A200A110); lower ids in the report are not
-// stow targets, so they are left out of suggestions and counts.
-const MIN_POSITION = { '2A': 110, '3A': 110 };
+/** True when no ranges are given (no filter) or `value` falls in one of them. */
+export function inRanges(ranges, value) {
+  return !ranges || ranges.some(([a, b]) => value >= a && value <= b);
+}
 
-/** False for bin ids below the floor/tower's first real position. */
+// Bin ids that are listed in the StowMap report but don't physically
+// exist (cross aisles, stairs). They are left out of suggestions, counts
+// and Excel lists. One entry per rule; ranges are inclusive.
+//   floors / towers / aisles: where it applies (left out = everywhere)
+//   positions: the missing positions
+// Floors 2 and 3 tower A start at 090; 100-105 and 190-195 are cross
+// aisles; aisles 203, 204, 217 and 218 have stairs from position 270 on.
+export const UNAVAILABLE_LOCATIONS = [
+  { floors: ['2', '3'], towers: ['A'], positions: [[0, 89]], reason: 'mevcut değil' },
+  { floors: ['2', '3'], towers: ['A'], positions: [[100, 109]], reason: 'ara koridor' },
+  { floors: ['2', '3'], towers: ['A'], positions: [[190, 195]], reason: 'ara koridor' },
+  {
+    floors: ['2', '3'],
+    towers: ['A'],
+    aisles: [203, 204, 217, 218],
+    positions: [[270, 999]],
+    reason: 'merdiven',
+  },
+];
+
+/** The rule that makes a bin id nonexistent, or null when the bin is real. */
+export function unavailableReason(bin) {
+  const rule = UNAVAILABLE_LOCATIONS.find(
+    (r) =>
+      (!r.floors || r.floors.includes(String(bin.floor))) &&
+      (!r.towers || r.towers.includes(bin.tower)) &&
+      (!r.aisles || r.aisles.includes(bin.aisle)) &&
+      inRanges(r.positions, bin.position)
+  );
+  return rule?.reason ?? null;
+}
+
+/** False for bin ids that don't physically exist (see UNAVAILABLE_LOCATIONS). */
 export function isStowablePosition(bin) {
-  const min = MIN_POSITION[`${bin.floor}${bin.tower}`];
-  return !min || bin.position >= min;
+  return unavailableReason(bin) === null;
 }
 
 /** Used share of the ASIN slots, 0-100 with one decimal (null when there are none). */
@@ -166,14 +197,16 @@ export function effectiveUnique(bin, mark) {
  *
  * @param {object[]} bins - expanded bins (expandBin)
  * @param {Record<string, {added?: number, full?: boolean}>} marks
- * @param {{ tower?: string, aisles?: Array<[number, number]>|null, shelves?: string[],
- *   dropzone?: string, hrvOnly?: boolean, skip?: Set<string> }} criteria
+ * @param {{ tower?: string, aisles?: Array<[number, number]>|null,
+ *   positions?: Array<[number, number]>|null, shelves?: string[],
+ *   dropzone?: string, hrvOnly?: boolean, skipEmpty?: boolean, skip?: Set<string> }} criteria
  * @returns {Array<object & { free: number, effectiveUnique: number }>}
  */
 export function findCandidates(bins, marks, criteria = {}) {
-  const { tower, aisles, shelves, dropzone, hrvOnly, skip } = criteria;
+  const { tower, aisles, positions, shelves, dropzone, hrvOnly, skipEmpty, skip } = criteria;
   const shelfSet = shelves && shelves.length > 0 ? new Set(shelves) : null;
-  const inAisles = (aisle) => !aisles || aisles.some(([a, b]) => aisle >= a && aisle <= b);
+  const inAisles = (aisle) => inRanges(aisles, aisle);
+  const inPositions = (position) => inRanges(positions, position);
 
   return bins
     .filter(
@@ -185,13 +218,15 @@ export function findCandidates(bins, marks, criteria = {}) {
         (!dropzone || bin.dropzone === dropzone) &&
         (!hrvOnly || bin.canHoldHrv) &&
         !skip?.has(bin.id) &&
-        inAisles(bin.aisle)
+        inAisles(bin.aisle) &&
+        inPositions(bin.position)
     )
     .map((bin) => {
       const used = effectiveUnique(bin, marks[bin.id]);
       return { ...bin, effectiveUnique: used, free: bin.max - used };
     })
-    .filter((bin) => bin.free > 0)
+    // skipEmpty: leave out bins nothing has been stowed into yet (0/6).
+    .filter((bin) => bin.free > 0 && (!skipEmpty || bin.effectiveUnique > 0))
     .sort(
       (a, b) =>
         a.aisle - b.aisle || a.position - b.position || a.shelf.localeCompare(b.shelf)
@@ -224,12 +259,12 @@ const withOccupancy = (g) => ({ ...g, occupancy: occupancyPercent(g.used, g.capa
  *
  * @param {object[]} bins - expanded bins
  * @param {Record<string, {added?: number, full?: boolean}>} marks
- * @param {{ tower?: string, aisles?: Array<[number, number]>|null, dropzone?: string,
+ * @param {{ tower?: string, aisles?: Array<[number, number]>|null,
+ *   positions?: Array<[number, number]>|null, dropzone?: string,
  *   hrvOnly?: boolean, shelves?: string[] }} criteria
  */
 export function summarizeBins(bins, marks, criteria = {}) {
-  const { tower, aisles, dropzone, hrvOnly, shelves } = criteria;
-  const inAisles = (aisle) => !aisles || aisles.some(([a, b]) => aisle >= a && aisle <= b);
+  const { tower, aisles, positions, dropzone, hrvOnly, shelves } = criteria;
   const byShelf = new Map();
   const byAisle = new Map();
   const byBinType = new Map();
@@ -239,7 +274,7 @@ export function summarizeBins(bins, marks, criteria = {}) {
     if (tower && bin.tower !== tower) continue;
     if (dropzone && bin.dropzone !== dropzone) continue;
     if (hrvOnly && !bin.canHoldHrv) continue;
-    if (!inAisles(bin.aisle)) continue;
+    if (!inRanges(aisles, bin.aisle) || !inRanges(positions, bin.position)) continue;
     const free = bin.max - effectiveUnique(bin, marks[bin.id]);
     addTo(byShelf, bin.shelf, bin, free);
     addTo(byAisle, bin.aisle, bin, free);

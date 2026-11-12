@@ -6,7 +6,10 @@
       "Bash(npx vitest *)",
       "Bash(node --check background/background.js)",
       "Bash(node --check sidepanel/sidepanel.js)",
-      "Bash(node --check background/services/pandashService.js)"
+      "Bash(node --check background/services/pandashService.js)",
+      "PowerShell(git *)",
+      "PowerShell(npx vitest run 2>&1 | Select-Object -Last 8)",
+      "Bash(node *)"
     ]
   }
 }

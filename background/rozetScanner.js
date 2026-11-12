@@ -5,7 +5,7 @@
 
 import { parseUserEntries } from '../shared/stowReportTable.js';
 import { isFeatureAllowed } from '../shared/access.js';
-import { buildHistoryDateFields } from '../shared/stowErrors.js';
+import { fetchHistoryByDay } from '../shared/historyByDay.js';
 import {
   buildNotifications,
   daysSince,
@@ -80,14 +80,12 @@ function notify(notes) {
 /** One associate: history since the cutoff, failed stows in it. */
 async function scanUser(deps, login, watermark, now) {
   const cutoff = scanCutoffMs(watermark, now);
-  const fields = { s: login, ...buildHistoryDateFields(now, daysSince(cutoff, now)) };
-  const result = await deps.fetchPagedSection(
-    'inventory-history',
-    fields,
-    'PARSE_INVENTORY_HISTORY_HTML',
-    'records',
-    { stopAfter: (items) => reachedCutoff(items, cutoff) }
-  );
+  const result = await fetchHistoryByDay(deps.fetchPagedSection, {
+    s: login,
+    now,
+    days: daysSince(cutoff, now),
+    stopAfter: (items) => reachedCutoff(items, cutoff),
+  });
   const recent = result.items.filter((r) => (recordTimeMs(r) ?? Infinity) >= cutoff);
   return {
     login,

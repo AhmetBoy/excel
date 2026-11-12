@@ -124,11 +124,17 @@ export function daysSince(cutoffMs, now = new Date()) {
   return Math.round((to - from) / 86_400_000) + 1;
 }
 
-/** History is newest-first: once a page reaches past the cutoff, stop paging. */
+/**
+ * True when paging can stop: the rows are newest-first and the last one
+ * read is already older than the cutoff. If the rows come oldest-first
+ * (seen as first row older than last), newer rows are still ahead, so
+ * paging never stops early.
+ */
 export function reachedCutoff(records, cutoffMs) {
-  const last = records.at(-1);
-  const ms = last ? recordTimeMs(last) : null;
-  return ms !== null && ms < cutoffMs;
+  const times = records.map(recordTimeMs).filter((ms) => ms !== null);
+  if (times.length === 0) return false;
+  if (times[0] < times.at(-1)) return false;
+  return times.at(-1) < cutoffMs;
 }
 
 export function groupKeyOf(event) {

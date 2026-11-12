@@ -52,7 +52,7 @@ function saveGapMinutes(value) {
   }
 }
 
-function productImage(stow, size) {
+export function productImage(stow, size) {
   const media = el('div', `product-image ${size}`);
   if (stow.imageUrl) {
     const img = document.createElement('img');

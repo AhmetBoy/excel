@@ -14,6 +14,7 @@ import { LOCATION_HISTORY_DAYS } from '../shared/locationStows.js';
 import { startRozetWatch } from './rozetScanner.js';
 import { extractStows, RECENT_STOW_COUNT, USER_STOW_HISTORY_DAYS } from '../shared/stowActivity.js';
 import { reachedCutoff } from '../shared/rozetWatch.js';
+import { fetchHistoryByDay } from '../shared/historyByDay.js';
 import { shiftOf } from '../shared/shifts.js';
 import { isFeatureAllowed } from '../shared/access.js';
 
@@ -158,15 +159,25 @@ const MAX_PARALLEL_PRODUCT_REQUESTS = 4;
  * FC Research "product" section per ASIN: High Value flag + image.
  * @returns {Promise<{ matches: Array<{asin: string, highValue: boolean|null, imageUrl: string|null, status: string}>, status: string }>}
  */
-async function resolveProducts(asins) {
+async function fetchProductMatch(asin) {
+  const response = await fetchFcResearchSection('product', { s: asin });
+  if (response.status !== 'ok') return { asin, highValue: null, imageUrl: null, status: response.status };
+  const parsed = await parseViaOffscreen('PARSE_PRODUCT_HTML', response.html);
+  if (!parsed.found) return { asin, highValue: null, imageUrl: null, status: 'not_found' };
+  return { asin, highValue: parsed.highValue, imageUrl: parsed.imageUrl, title: parsed.title ?? null, status: 'ok' };
+}
+
+/**
+ * @param {string[]} asins
+ * @param {Map<string, Promise<object>>} [cache] - shared within one lookup so
+ *   the same ASIN is fetched only once
+ */
+async function resolveProducts(asins, cache = new Map()) {
   if (asins.length === 0) return { matches: [], status: 'skipped_no_asin' };
 
-  const matches = await mapWithConcurrency(asins, MAX_PARALLEL_PRODUCT_REQUESTS, async (asin) => {
-    const response = await fetchFcResearchSection('product', { s: asin });
-    if (response.status !== 'ok') return { asin, highValue: null, imageUrl: null, status: response.status };
-    const parsed = await parseViaOffscreen('PARSE_PRODUCT_HTML', response.html);
-    if (!parsed.found) return { asin, highValue: null, imageUrl: null, status: 'not_found' };
-    return { asin, highValue: parsed.highValue, imageUrl: parsed.imageUrl, title: parsed.title ?? null, status: 'ok' };
+  const matches = await mapWithConcurrency(asins, MAX_PARALLEL_PRODUCT_REQUESTS, (asin) => {
+    if (!cache.has(asin)) cache.set(asin, fetchProductMatch(asin));
+    return cache.get(asin);
   });
 
   const failed = matches.filter((m) => m.status !== 'ok');
@@ -321,25 +332,21 @@ async function resolveInventoryHistory(scannableId) {
  * with product images. Pages until the shift start is passed and at least
  * one stow was seen, so a quiet shift still shows the last stow before it.
  */
-async function resolveUserStows(login) {
+async function resolveUserStows(login, productCache) {
   const now = new Date();
   const shift = shiftOf(now);
   const shiftStartMs = shift.startsAt.getTime();
-  const result = await fetchPagedSection(
-    'inventory-history',
-    { s: login, ...buildHistoryDateFields(now, USER_STOW_HISTORY_DAYS) },
-    'PARSE_INVENTORY_HISTORY_HTML',
-    'records',
-    {
-      stopAfter: (items) =>
-        reachedCutoff(items, shiftStartMs) && extractStows(items, login).length > 0,
-    }
-  );
+  const result = await fetchHistoryByDay(fetchPagedSection, {
+    s: login,
+    now,
+    days: USER_STOW_HISTORY_DAYS,
+    stopAfter: (items) => reachedCutoff(items, shiftStartMs) && extractStows(items, login).length > 0,
+  });
 
   const stows = extractStows(result.items, login);
   const recent = stows.slice(0, RECENT_STOW_COUNT);
   const asins = [...new Set(recent.map((s) => s.asin).filter(Boolean))];
-  const products = asins.length > 0 ? await resolveProducts(asins) : { matches: [] };
+  const products = asins.length > 0 ? await resolveProducts(asins, productCache) : { matches: [] };
   const productInfo = Object.fromEntries(
     products.matches.map((m) => [m.asin, { imageUrl: m.imageUrl, highValue: m.highValue, title: m.title ?? null }])
   );
@@ -355,7 +362,8 @@ async function resolveUserStows(login) {
 }
 
 async function lookupUser({ login, query }) {
-  const stowActivityPromise = resolveUserStows(login).catch((error) => ({
+  const productCache = new Map();
+  const stowActivityPromise = resolveUserStows(login, productCache).catch((error) => ({
     status: 'error',
     message: String(error?.message ?? error),
   }));
@@ -372,24 +380,41 @@ async function lookupUser({ login, query }) {
     }
   );
 
+  const errorGroups = containers.flatMap(
+    (c) => analyzeStowErrors(c.history.records, { container: c.scannableId, person: login }).groups
+  );
+
   // For every bin with a failed stow, read the bin's current Inventory so
   // the panel can show how many units the system expects there.
-  const errorBins = [
+  const errorBins = [...new Set(errorGroups.map((g) => g.bin))];
+  // Images for the products in the totes and in the "pick back" lines.
+  const asins = [
     ...new Set(
-      containers.flatMap((c) =>
-        analyzeStowErrors(c.history.records, { container: c.scannableId, person: login }).groups.map(
-          (g) => g.bin
-        )
-      )
+      [...containers.flatMap((c) => c.inventory.records), ...errorGroups]
+        .map((item) => (item.asin ?? '').trim().toUpperCase())
+        .filter(Boolean)
     ),
   ];
-  const binResults = await mapWithConcurrency(errorBins, MAX_PARALLEL_CONTAINER_LOOKUPS, (bin) =>
-    resolveInventory(bin)
-  );
+  const [binResults, products] = await Promise.all([
+    mapWithConcurrency(errorBins, MAX_PARALLEL_CONTAINER_LOOKUPS, (bin) => resolveInventory(bin)),
+    resolveProducts(asins, productCache),
+  ]);
   const binInventory = Object.fromEntries(errorBins.map((bin, i) => [bin, binResults[i]]));
+  const productInfo = Object.fromEntries(
+    products.matches.map((m) => [m.asin, { imageUrl: m.imageUrl, title: m.title ?? null, highValue: m.highValue }])
+  );
 
   const stowActivity = await stowActivityPromise;
-  return { login, query, status: hierarchy.status, path: hierarchy.path, containers, binInventory, stowActivity };
+  return {
+    login,
+    query,
+    status: hierarchy.status,
+    path: hierarchy.path,
+    containers,
+    binInventory,
+    productInfo,
+    stowActivity,
+  };
 }
 
 /**

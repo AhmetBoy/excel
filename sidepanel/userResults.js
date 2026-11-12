@@ -3,7 +3,7 @@ import { describeSourceStatus } from '../shared/resultsView.js';
 import { countVariety, sumQuantity } from '../shared/toteChecks.js';
 import { HISTORY_DAYS, analyzeStowErrors, systemQuantityInBin } from '../shared/stowErrors.js';
 import { createBarcodeElement } from './barcodeDom.js';
-import { renderStowActivity } from './stowActivity.js';
+import { productImage, renderStowActivity } from './stowActivity.js';
 
 const INVENTORY_COLUMNS = [
   { key: 'asin', label: 'ASIN' },
@@ -29,14 +29,27 @@ function inventoryBadge(inventory) {
   return el('span', 'status-badge ok', `${sumQuantity(records)} ürün · ${countVariety(records)} çeşit`);
 }
 
-function inventoryTable(records) {
+function asinKey(value) {
+  return (value ?? '').trim().toUpperCase();
+}
+
+/** Image + title for a product, from the lookup's productInfo (keyed by ASIN). */
+function productOf(productInfo, asin) {
+  return { asin, ...(productInfo?.[asinKey(asin)] ?? {}) };
+}
+
+function inventoryTable(records, productInfo) {
   const table = el('table', 'inventory-mini');
   const headRow = el('tr');
+  headRow.appendChild(el('th', null, 'Görsel'));
   for (const column of INVENTORY_COLUMNS) headRow.appendChild(el('th', null, column.label));
   table.appendChild(el('thead')).appendChild(headRow);
   const body = table.appendChild(el('tbody'));
   for (const record of records) {
     const row = el('tr');
+    const imageCell = el('td', 'image-cell');
+    imageCell.appendChild(productImage(productOf(productInfo, record.asin), 'small'));
+    row.appendChild(imageCell);
     for (const column of INVENTORY_COLUMNS) {
       row.appendChild(el('td', null, displayOrMissing(record[column.key])));
     }
@@ -53,7 +66,7 @@ function systemQuantityText(binInventory, group) {
   return `Sistemde olması gereken: ${systemQuantityInBin(binInventory.records, group)} adet`;
 }
 
-function stowErrorBlock(container, analysis, binInventory) {
+function stowErrorBlock(container, analysis, binInventory, productInfo) {
   const block = el('div', 'stow-errors');
   const { history } = container;
 
@@ -70,6 +83,14 @@ function stowErrorBlock(container, analysis, binInventory) {
     block.classList.add('has-errors');
     block.appendChild(el('div', 'stow-errors-title', `Geri toplanacak: ${analysis.totalToPick} adet`));
     for (const group of analysis.groups) {
+      // History rows may carry only the FNSku; the tote's Inventory maps it to an ASIN.
+      const asin =
+        group.asin ??
+        container.inventory.records.find((r) => group.fnSku && asinKey(r.fnSku) === asinKey(group.fnSku))?.asin;
+      const product = productOf(productInfo, asin);
+
+      const item = el('div', 'stow-error-item');
+      const text = el('div', 'stow-error-text');
       const line = el('div', 'stow-error-line');
       line.append(
         el('strong', null, group.bin),
@@ -77,8 +98,11 @@ function stowErrorBlock(container, analysis, binInventory) {
         el('span', 'stow-pick', ` → ${group.toPick} adet geri topla`),
         el('span', 'stow-detail', ` (atılamadı ${group.failed}, atıldı ${group.succeeded})`)
       );
-      block.appendChild(line);
-      block.appendChild(el('div', 'stow-system-qty', systemQuantityText(binInventory?.[group.bin], group)));
+      text.append(line);
+      if (product.title) text.append(el('div', 'product-title', product.title));
+      text.append(el('div', 'stow-system-qty', systemQuantityText(binInventory?.[group.bin], group)));
+      item.append(productImage(product, 'medium'), text);
+      block.appendChild(item);
     }
   }
 
@@ -93,7 +117,7 @@ function stowErrorBlock(container, analysis, binInventory) {
   return block;
 }
 
-function containerCard(container, analysis, binInventory, onOpenContainer) {
+function containerCard(container, analysis, response, onOpenContainer) {
   const card = el('article', 'container-card');
   card.appendChild(createBarcodeElement(container.scannableId));
 
@@ -109,12 +133,12 @@ function containerCard(container, analysis, binInventory, onOpenContainer) {
   openButton.addEventListener('click', () => onOpenContainer(container.scannableId));
   head.appendChild(openButton);
   card.appendChild(head);
-  card.appendChild(stowErrorBlock(container, analysis, binInventory));
+  card.appendChild(stowErrorBlock(container, analysis, response.binInventory, response.productInfo));
 
   if (container.inventory.records.length > 0) {
     const details = el('details');
     details.appendChild(el('summary', null, 'Inventory'));
-    details.appendChild(inventoryTable(container.inventory.records));
+    details.appendChild(inventoryTable(container.inventory.records, response.productInfo));
     card.appendChild(details);
   }
   return card;
@@ -164,7 +188,7 @@ export function renderUserResults(target, response, onOpenContainer) {
 
   const grid = el('div', 'barcode-grid');
   containers.forEach((container, index) => {
-    grid.appendChild(containerCard(container, analyses[index], response.binInventory, onOpenContainer));
+    grid.appendChild(containerCard(container, analyses[index], response, onOpenContainer));
   });
 
   const activity = el('section');

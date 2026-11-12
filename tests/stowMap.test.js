@@ -9,6 +9,7 @@ import {
   occupancyPercent,
   parseStowMapCsv,
   summarizeBins,
+  unavailableReason,
 } from '../shared/stowMap.js';
 
 const HEADER =
@@ -122,20 +123,29 @@ describe('summarizeBins', () => {
   });
 });
 
-describe('floor 2 / 3 tower A start at position 110', () => {
-  const bins = parseStowMapCsv(
-    [HEADER, line('P-2-A200A100'), line('P-2-A200A109'), line('P-2-A200A110'), line('P-2-B200A100')].join('\n')
-  ).floors['2'].map(expandBin);
+describe('nonexistent locations on floors 2 / 3 tower A', () => {
+  const ids = [
+    'P-2-A200A085', 'P-2-A200A090', 'P-2-A200A095', 'P-2-A200A100', 'P-2-A200A105', 'P-2-A200A110',
+    'P-2-A200A185', 'P-2-A200A190', 'P-2-A200A195', 'P-2-A200A200',
+    'P-2-A203A270', 'P-2-A203A275', 'P-2-A205A275', 'P-2-B200A100',
+  ];
+  const bins = parseStowMapCsv([HEADER, ...ids.map((id) => line(id))].join('\n')).floors['2'].map(expandBin);
 
-  it('leaves positions below 110 out of suggestions and counts', () => {
-    expect(findCandidates(bins, {}, { tower: 'A' }).map((b) => b.id)).toEqual(['P-2-A200A110']);
-    expect(summarizeBins(bins, {}, { tower: 'A' }).selection.total).toBe(1);
+  it('skips positions before 090, cross aisles and stairs', () => {
+    expect(findCandidates(bins, {}, { tower: 'A' }).map((b) => b.id)).toEqual([
+      'P-2-A200A090', 'P-2-A200A095', 'P-2-A200A110', 'P-2-A200A185', 'P-2-A200A200',
+      'P-2-A205A275',
+    ]);
+    expect(summarizeBins(bins, {}, { tower: 'A' }).selection.total).toBe(6);
+    expect(unavailableReason({ floor: '2', tower: 'A', aisle: 217, position: 270 })).toBe('merdiven');
+    expect(unavailableReason({ floor: '3', tower: 'A', aisle: 200, position: 105 })).toBe('ara koridor');
+    expect(unavailableReason({ floor: '3', tower: 'A', aisle: 218, position: 280 })).toBe('merdiven');
   });
 
   it('keeps other towers and floor 1 as they are', () => {
     expect(findCandidates(bins, {}, { tower: 'B' }).map((b) => b.id)).toEqual(['P-2-B200A100']);
-    expect(isStowablePosition({ floor: '1', tower: 'A', position: 100 })).toBe(true);
-    expect(isStowablePosition({ floor: '3', tower: 'A', position: 105 })).toBe(false);
+    expect(isStowablePosition({ floor: '1', tower: 'A', aisle: 203, position: 100 })).toBe(true);
+    expect(isStowablePosition({ floor: '1', tower: 'A', aisle: 203, position: 280 })).toBe(true);
   });
 });
 

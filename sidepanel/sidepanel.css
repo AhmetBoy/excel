@@ -822,13 +822,6 @@ td.cell-hrv {
   margin-top: 4px;
 }
 
-.stowmap-next {
-  margin: 2px 0 8px;
-  padding-left: 18px;
-  font-size: 12px;
-  color: #444;
-}
-
 .stowmap-import-note {
   font-size: 11px;
   color: #1d6b2c;
@@ -1514,4 +1507,157 @@ body.locked #login-screen {
 .gap-kind {
   color: #777;
   font-size: 11px;
+}
+
+/* Product images in the associate lookup (tote Inventory + pick-back lines) */
+.inventory-mini td.image-cell {
+  width: 52px;
+  padding: 2px;
+}
+
+.inventory-mini .product-image.small {
+  flex-basis: 48px;
+  width: 48px;
+  height: 48px;
+  background: #fff;
+}
+
+.product-image.medium {
+  flex: 0 0 64px;
+  height: 64px;
+  background: #fff;
+}
+
+.stow-error-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 4px 0;
+  border-top: 1px dashed #e6c2bd;
+}
+
+.stow-error-item:first-of-type {
+  border-top: none;
+}
+
+.stow-error-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.stow-error-text .stow-system-qty {
+  margin-left: 0;
+}
+
+/* StowMap: full list of the next candidate bins */
+.stowmap-next-wrap {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid #dde1e6;
+  border-radius: 6px;
+  margin: 2px 0 8px;
+}
+
+.stowmap-next-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.stowmap-next-table th {
+  position: sticky;
+  top: 0;
+  background: #f4f5f7;
+  text-align: left;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.stowmap-next-table td {
+  padding: 4px 8px;
+  border-top: 1px solid #eef0f2;
+  white-space: nowrap;
+}
+
+.stowmap-next-table td.bin-id {
+  font-weight: 700;
+  font-family: Consolas, monospace;
+  font-size: 14px;
+}
+
+.stowmap-next-table tr:nth-child(even) td {
+  background: #fafbfc;
+}
+
+/* StowMap Excel lists */
+#stowmap-export {
+  border: 1px solid #dde1e6;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: #fafbfc;
+  font-size: 12px;
+}
+
+#stowmap-export summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+#stowmap-export .hint {
+  font-size: 11px;
+  color: #666;
+  margin: 4px 0 6px;
+}
+
+#stowmap-export-add {
+  align-self: flex-end;
+}
+
+#stowmap-export-sections,
+#stowmap-export-saved {
+  margin: 4px 0 8px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid #e3e6ea;
+  border-radius: 4px;
+  background: #fff;
+  margin-bottom: 4px;
+}
+
+.export-row .export-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.export-row .export-sub {
+  color: #666;
+  font-size: 11px;
+}
+
+.export-row button {
+  padding: 2px 7px;
+  font-size: 12px;
+}
+
+.stowmap-export-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#stowmap-export-name {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
 }

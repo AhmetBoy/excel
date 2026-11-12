@@ -61,6 +61,11 @@ export function renderLocationResults(container, response) {
   const isLocation = response.kind === 'location';
   const stowMap = isLocation ? stowsIntoLocation(response.locationHistory ?? [], response.toteNumber) : null;
   const products = groupByProduct(response.rows ?? []);
+  if (isLocation) {
+    // Most recently stowed product first; products with no stow record last.
+    const lastStowAt = (product) => stowsForProduct(stowMap, product)[0]?.sortKey ?? -1;
+    products.sort((a, b) => lastStowAt(b) - lastStowAt(a));
+  }
 
   if (products.length === 0) {
     container.replaceChildren(el('div', 'empty-state', 'Bu aramada ürün bulunamadı.'));

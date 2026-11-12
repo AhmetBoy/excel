@@ -124,6 +124,8 @@ describe('scan window', () => {
     const oldest = Date.parse(records.at(-1).time);
     expect(reachedCutoff(records, oldest + 1)).toBe(true);
     expect(reachedCutoff(records, oldest)).toBe(false);
+    // oldest-first pages: newer rows are still ahead, keep paging
+    expect(reachedCutoff([...records].reverse(), Date.now() + 86_400_000)).toBe(false);
   });
 });
 
