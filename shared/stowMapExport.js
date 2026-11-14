@@ -4,7 +4,7 @@
 // from the latest imported CSV every time it is downloaded.
 
 import { effectiveUnique, inRanges, isStowablePosition, parseAisleSpec } from './stowMap.js';
-import { XLSX_STYLE } from './xlsxWriter.js';
+import { XLSX_STYLE, columnLetter } from './xlsxWriter.js';
 
 export const SORT_ORDERS = {
   'aisle-position-shelf': { label: 'Koridor › Sıra › Bin', keys: ['aisle', 'position', 'shelf'] },
@@ -79,54 +79,74 @@ export function describeSection(section) {
 }
 
 export const EXPORT_COLUMNS = [
-  { label: 'No', width: 6, value: (bin, i) => i + 1 },
-  { label: 'Bölüm', width: 8, value: (bin, i, sectionNo) => sectionNo },
   { label: 'Lokasyon', width: 16, value: (bin) => bin.id },
   { label: 'Kat', width: 5, value: (bin) => Number(bin.floor) },
   { label: 'Tower', width: 7, value: (bin) => bin.tower },
-  { label: 'Koridor', width: 8, value: (bin) => bin.aisle },
-  { label: 'Sıra', width: 6, value: (bin) => bin.position },
   { label: 'Bin', width: 5, value: (bin) => bin.shelf },
   { label: 'Bin Type', width: 18, value: (bin) => bin.binType },
-  { label: 'Dropzone', width: 18, value: (bin) => bin.dropzone },
-  { label: 'Unique ASIN', width: 11, value: (bin) => bin.effectiveUnique },
-  { label: 'Max', width: 6, value: (bin) => bin.max },
   { label: 'Boş yer', width: 8, value: (bin) => bin.free },
-  { label: 'Total Units', width: 11, value: (bin) => bin.totalUnits },
-  { label: 'HRV', width: 6, value: (bin) => (bin.canHoldHrv ? 'Evet' : 'Hayır') },
-  { label: 'Kilitli', width: 7, value: (bin) => (bin.locked ? 'Evet' : 'Hayır') },
 ];
+
+/** Blank rows left after each section's bins. */
+export const SECTION_GAP_ROWS = 2;
 
 /**
  * Sheet rows for buildXlsx(): title, one line per section describing it,
- * a header, then every section's bins in list order (numbered 1..n overall).
+ * then each section in list order as its own block - the same "Bölüm n: ..."
+ * title, a column header and its bins - followed by SECTION_GAP_ROWS blank
+ * rows. `rowBreaks` puts a page break after every section but the last, so
+ * each section prints on its own page(s).
  *
  * @param {string} name
  * @param {Array<{ section: object, bins: object[], missing?: boolean }>} parts
  * @param {Date} [now]
+ * @returns {{ rows: object[][], rowBreaks: number[], columnWidths: number[] }}
  */
 export function buildExportRows(name, parts, now = new Date()) {
   const pad = (n) => String(n).padStart(2, '0');
   const stamp = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const total = parts.reduce((sum, p) => sum + p.bins.length, 0);
+  const sectionTitle = (part, i) =>
+    `Bölüm ${i + 1}: ${describeSection(part.section)} · ${part.bins.length} lokasyon` +
+    (part.missing ? ' · KAT YÜKLÜ DEĞİL' : '');
 
-  const rows = [[{ v: `${name} · ${stamp} · ${total} lokasyon`, s: XLSX_STYLE.BOLD }]];
-  parts.forEach((part, i) => {
-    const note = part.missing ? ' · KAT YÜKLÜ DEĞİL' : '';
-    rows.push([{ v: `Bölüm ${i + 1}: ${describeSection(part.section)} · ${part.bins.length} lokasyon${note}` }]);
-  });
+  // Title lines are merged across all columns and wrapped: left in column A
+  // alone, long text spills to the right of the table and Excel prints those
+  // empty columns on extra pages.
+  const rows = [];
+  const merges = [];
+  const rowHeights = {};
+  const lastColumn = columnLetter(EXPORT_COLUMNS.length - 1);
+  const charsPerLine = Math.floor(EXPORT_COLUMNS.reduce((sum, c) => sum + c.width, 0) * 0.85);
+  const pushTitle = (text, style) => {
+    const r = rows.length;
+    rows.push([{ v: text, s: style }]);
+    merges.push(`A${r + 1}:${lastColumn}${r + 1}`);
+    const lines = Math.ceil(text.length / charsPerLine);
+    if (lines > 1) rowHeights[r] = lines * 15;
+  };
+
+  pushTitle(`${name} · ${stamp} · ${total} lokasyon`, XLSX_STYLE.BOLD_WRAP);
+  parts.forEach((part, i) => pushTitle(sectionTitle(part, i), XLSX_STYLE.WRAP));
   rows.push([]);
-  const headerIndex = rows.length;
-  rows.push(EXPORT_COLUMNS.map((c) => ({ v: c.label, s: XLSX_STYLE.HEADER })));
 
-  let n = 0;
-  parts.forEach((part, sectionIndex) => {
-    for (const bin of part.bins) {
-      rows.push(EXPORT_COLUMNS.map((c) => ({ v: c.value(bin, n, sectionIndex + 1) })));
-      n++;
-    }
+  const rowBreaks = [];
+  parts.forEach((part, i) => {
+    pushTitle(sectionTitle(part, i), XLSX_STYLE.BOLD_WRAP);
+    rows.push(EXPORT_COLUMNS.map((c) => ({ v: c.label, s: XLSX_STYLE.HEADER })));
+    for (const bin of part.bins) rows.push(EXPORT_COLUMNS.map((c) => ({ v: c.value(bin) })));
+    for (let k = 0; k < SECTION_GAP_ROWS; k++) rows.push([]);
+    if (i < parts.length - 1) rowBreaks.push(rows.length); // break after this row (1-based)
   });
-  return { rows, headerRows: headerIndex + 1, columnWidths: EXPORT_COLUMNS.map((c) => c.width) };
+
+  return {
+    rows,
+    rowBreaks,
+    merges,
+    rowHeights,
+    print: { columns: EXPORT_COLUMNS.length },
+    columnWidths: EXPORT_COLUMNS.map((c) => c.width),
+  };
 }
 
 /** File-name friendly version of a list name. */

@@ -14,7 +14,6 @@ import { buildXlsx } from '../shared/xlsxWriter.js';
 const EXPORTS_KEY = 'stowMap:exports';
 const DRAFT_KEY = 'stowMap:exportDraft';
 // More header lines than this and freezing them would fill the screen.
-const MAX_FROZEN_ROWS = 8;
 
 const sortSelect = document.getElementById('stowmap-export-sort');
 const availableInput = document.getElementById('stowmap-export-available');
@@ -166,13 +165,9 @@ async function download(list) {
     }
 
     const now = new Date();
-    const { rows, headerRows, columnWidths } = buildExportRows(list.name, parts, now);
-    const bytes = buildXlsx({
-      sheetName: list.name,
-      rows,
-      columnWidths,
-      freeze: headerRows <= MAX_FROZEN_ROWS ? { rows: headerRows, cols: 0 } : undefined,
-    });
+    // Every section has its own header now, so no frozen rows.
+    const sheet = buildExportRows(list.name, parts, now);
+    const bytes = buildXlsx({ sheetName: list.name, ...sheet });
     const blob = new Blob([bytes], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });

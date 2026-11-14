@@ -10,6 +10,8 @@ export const XLSX_STYLE = {
   TOP: 2, // bold dark green on light green - top performer
   FOOTER: 3, // bold, grey fill
   BOLD: 4,
+  WRAP: 5, // wrapped text, top aligned (e.g. a merged description row)
+  BOLD_WRAP: 6,
 };
 
 const CRC_TABLE = (() => {
@@ -134,12 +136,14 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <border><left style="thin"><color rgb="FFD0D0D0"/></left><right style="thin"><color rgb="FFD0D0D0"/></right><top style="thin"><color rgb="FFD0D0D0"/></top><bottom style="thin"><color rgb="FFD0D0D0"/></bottom><diagonal/></border>
 </borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="5">
+<cellXfs count="7">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
 <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
 <xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
@@ -152,10 +156,14 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
  *   rows: Array<Array<{ v: string|number|null, s?: number }>>,
  *   columnWidths?: number[],
  *   freeze?: { rows: number, cols: number },
+ *   rowBreaks?: number[], // manual page breaks after these 1-based row numbers
+ *   merges?: string[], // cell ranges to merge, e.g. "A1:F1"
+ *   rowHeights?: Record<number, number>, // 0-based row index -> height in points
+ *   print?: { columns: number }, // print only the first N columns, fitted to one page wide (A4 portrait)
  * }} options
  * @returns {Uint8Array}
  */
-export function buildXlsx({ sheetName, rows, columnWidths = [], freeze }) {
+export function buildXlsx({ sheetName, rows, columnWidths = [], freeze, rowBreaks = [], merges = [], rowHeights = {}, print }) {
   const encoder = new TextEncoder();
   // Excel limits sheet names to 31 chars and forbids []:*?/\
   const safeSheetName = escapeXml(String(sheetName).replace(/[[\]:*?/\\]/g, ' ').slice(0, 31) || 'Sheet1');
@@ -174,7 +182,9 @@ export function buildXlsx({ sheetName, rows, columnWidths = [], freeze }) {
           return `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
         })
         .join('');
-      return `<row r="${r + 1}">${xmlCells}</row>`;
+      const height = rowHeights[r];
+      const ht = height > 0 ? ` ht="${height}" customHeight="1"` : '';
+      return `<row r="${r + 1}"${ht}>${xmlCells}</row>`;
     })
     .join('');
 
@@ -196,8 +206,35 @@ export function buildXlsx({ sheetName, rows, columnWidths = [], freeze }) {
         .join('')}</cols>`
     : '';
 
+  const breaks = [...new Set(rowBreaks)].filter((r) => Number.isInteger(r) && r > 0).sort((a, b) => a - b);
+  const mergeXml = merges.length
+    ? `<mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join('')}</mergeCells>`
+    : '';
+  // Element order is fixed by the schema (sheetPr first; mergeCells,
+  // pageMargins, pageSetup, rowBreaks after sheetData) - Excel rejects the
+  // file if it is wrong.
+  const sheetPr = print ? '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' : '';
+  const needsMargins = print || breaks.length;
+  const printXml =
+    (needsMargins ? `<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>` : '') +
+    (print ? `<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>` : '') +
+    (breaks.length
+      ? `<rowBreaks count="${breaks.length}" manualBreakCount="${breaks.length}">` +
+        breaks.map((r) => `<brk id="${r}" max="16383" man="1"/>`).join('') +
+        `</rowBreaks>`
+      : '');
+
   const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${sheetViews}${cols}<sheetData>${sheetRows}</sheetData></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${sheetPr}${sheetViews}${cols}<sheetData>${sheetRows}</sheetData>${mergeXml}${printXml}</worksheet>`;
+
+  // Print area limited to the given columns, so long text spilling to the
+  // right of them never ends up on extra (nearly empty) printed pages.
+  const quotedSheet = `'${String(sheetName).replace(/[[\]:*?/\\]/g, ' ').slice(0, 31).replace(/'/g, "''") || 'Sheet1'}'`;
+  const definedNames = print
+    ? `<definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">${escapeXml(
+        `${quotedSheet}!$A$1:$${columnLetter(Math.max(1, print.columns) - 1)}$${Math.max(1, rows.length)}`
+      )}</definedName></definedNames>`
+    : '';
 
   const files = {
     '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -214,7 +251,7 @@ export function buildXlsx({ sheetName, rows, columnWidths = [], freeze }) {
 </Relationships>`,
     'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="${safeSheetName}" sheetId="1" r:id="rId1"/></sheets>
+<sheets><sheet name="${safeSheetName}" sheetId="1" r:id="rId1"/></sheets>${definedNames}
 </workbook>`,
     'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">

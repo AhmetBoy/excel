@@ -59,6 +59,26 @@ describe('buildXlsx', () => {
     expect(sheet).toContain('<c r="B1" s="2"><v>42</v></c>');
     expect(sheet).toContain('state="frozen"');
     expect(files['xl/workbook.xml']).toContain('name="Saatlik Stow"');
+    expect(sheet).not.toContain('rowBreaks');
+  });
+
+  it('limits the print area, fits to one page wide and merges cells', () => {
+    const files = readZip(
+      buildXlsx({ sheetName: "Ali's", rows: [[{ v: 'x' }], [{ v: 1 }]], merges: ['A1:C1'], rowHeights: { 0: 30 }, print: { columns: 3 } })
+    );
+    const sheet = files['xl/worksheets/sheet1.xml'];
+    expect(sheet).toMatch(/<worksheet[^>]*><sheetPr><pageSetUpPr fitToPage="1"\/><\/sheetPr>/);
+    expect(sheet).toContain('<row r="1" ht="30" customHeight="1">');
+    expect(sheet).toMatch(/<\/sheetData><mergeCells count="1"><mergeCell ref="A1:C1"\/><\/mergeCells><pageMargins [^>]*\/><pageSetup [^>]*fitToWidth="1" fitToHeight="0"\/><\/worksheet>/);
+    expect(files['xl/workbook.xml']).toContain(`<definedName name="_xlnm.Print_Area" localSheetId="0">'Ali''s'!$A$1:$C$2</definedName>`);
+  });
+
+  it('writes manual page breaks after sheetData', () => {
+    const files = readZip(buildXlsx({ sheetName: 'S', rows: [[{ v: 1 }], [{ v: 2 }], [{ v: 3 }]], rowBreaks: [2, 1, 2] }));
+    const sheet = files['xl/worksheets/sheet1.xml'];
+    expect(sheet).toMatch(
+      /<\/sheetData><pageMargins [^>]*\/><rowBreaks count="2" manualBreakCount="2"><brk id="1" max="16383" man="1"\/><brk id="2" max="16383" man="1"\/><\/rowBreaks><\/worksheet>/
+    );
   });
 });
 

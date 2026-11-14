@@ -64,21 +64,37 @@ describe('findCandidates positions', () => {
 });
 
 describe('buildExportRows', () => {
-  it('writes title, section lines, header and numbered bins in section order', () => {
+  it('writes title, section lines, then each section as titled block with gap and page break', () => {
     const sections = [
       { floor: '1', shelves: ['D'], onlyAvailable: true },
       { floor: '1', shelves: ['A'], onlyAvailable: true },
     ];
     const parts = sections.map((section) => ({ section, bins: selectSectionBins(bins, {}, section) }));
-    const { rows, headerRows } = buildExportRows('Test', parts, new Date(2026, 10, 11, 9, 5));
-    expect(rows[0][0].v).toBe('Test · 11.11.2026 09:05 · 4 lokasyon');
-    expect(rows[1][0].v).toContain('Bölüm 1: Kat 1 · Bin D');
-    expect(headerRows).toBe(5);
-    expect(rows[4][2].v).toBe('Lokasyon');
-    const data = rows.slice(headerRows);
-    expect(data.map((r) => r[2].v)).toEqual(['P-1-A200D110', 'P-1-A201D120', 'P-1-A200A110', 'P-1-A205A150']);
-    expect(data.map((r) => r[0].v)).toEqual([1, 2, 3, 4]);
-    expect(data.map((r) => r[1].v)).toEqual([1, 1, 2, 2]);
+    const { rows, rowBreaks } = buildExportRows('Test', parts, new Date(2026, 10, 11, 9, 5));
+    const values = rows.map((r) => r.map((c) => c.v));
+    expect(values[0][0]).toBe('Test · 11.11.2026 09:05 · 4 lokasyon');
+    expect(values[1][0]).toContain('Bölüm 1: Kat 1 · Bin D');
+    expect(values[3]).toEqual([]);
+    // Section 1 block: title, header, 2 bins, 2 blank rows
+    expect(values[4][0]).toBe(values[1][0]);
+    expect(values[5]).toEqual(['Lokasyon', 'Kat', 'Tower', 'Bin', 'Bin Type', 'Boş yer']);
+    expect(values[6][0]).toBe('P-1-A200D110');
+    expect(values[7][0]).toBe('P-1-A201D120');
+    expect(values[8]).toEqual([]);
+    expect(values[9]).toEqual([]);
+    // Section 2 starts on a new page
+    expect(rowBreaks).toEqual([10]);
+    expect(values[10][0]).toBe(values[2][0]);
+    expect(values[12][0]).toBe('P-1-A200A110');
+    expect(values[13][0]).toBe('P-1-A205A150');
+    expect(rows).toHaveLength(16);
+  });
+
+  it('keeps titles inside the printed columns', () => {
+    const parts = [{ section: { floor: '1', shelves: ['A'] }, bins: selectSectionBins(bins, {}, { floor: '1', shelves: ['A'] }) }];
+    const { merges, print } = buildExportRows('Test', parts);
+    expect(print).toEqual({ columns: 6 });
+    expect(merges).toEqual(['A1:F1', 'A2:F2', 'A4:F4']);
   });
 
   it('flags a section whose floor is not loaded', () => {
