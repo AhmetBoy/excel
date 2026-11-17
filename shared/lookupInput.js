@@ -11,9 +11,52 @@ export const PERSONAL_CONTAINER_PREFIX = 'pc99';
  * - match: regex tested against the trimmed input
  * - build: turns the regex match into the lookup fields
  */
+function swapCase(text) {
+  return text.replace(/[a-z]/gi, (c) => (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()));
+}
+
+/**
+ * Fixes the case of a tote typed with Caps Lock on (or all upper / lower):
+ * the prefix is always tsX / csX; an "SA" + digits tail (tsXSA901314) is
+ * upper case, every other tail (tsX09hruvzf, csXhbyjrsav) lower case.
+ */
+function normalizeTote(prefix, tail) {
+  return `${prefix}${/^sa\d+$/i.test(tail) ? tail.toUpperCase() : tail.toLowerCase()}`;
+}
+
 export const LOOKUP_RULES = [
   {
-    // Logins are letters only (they never contain digits); "pc99<login>" too.
+    // Containers come before the login rule: a csX can be letters only
+    // (csXhbyjrsav) and would otherwise be read as a login.
+    // tsX… always holds a digit (tsXSA901314, tsX09hruvzf).
+    kind: 'container',
+    type: 'tote',
+    label: 'Tote',
+    match: /^tsx(?=[a-z0-9]*\d)[a-z0-9]+$/i,
+    build: (m) => ({ query: normalizeTote('tsX', m[0].slice(3)) }),
+  },
+  {
+    // Cart: csX + exactly 8 characters (csXhbyjrsav, csXhhniwq73).
+    kind: 'container',
+    type: 'tote',
+    label: 'Tote',
+    match: /^csx[a-z0-9]{8}$/i,
+    build: (m) => ({ query: normalizeTote('csX', m[0].slice(3)) }),
+  },
+  {
+    // Pallet: paX… with a digit. The tail's real case isn't known, so only
+    // the prefix is fixed; a Caps Lock-inverted value ("PAx…") is flipped back.
+    kind: 'container',
+    type: 'tote',
+    label: 'Tote',
+    match: /^pax(?=[a-z0-9]*\d)[a-z0-9]+$/i,
+    build: (m) => {
+      const tail = m[0].slice(3);
+      return { query: `paX${m[0].startsWith('PAx') ? swapCase(tail) : tail}` };
+    },
+  },
+  {
+    // Logins are lower-case letters only (never digits); "pc99<login>" too.
     kind: 'user',
     type: 'user',
     label: 'Kullanıcı',
@@ -22,14 +65,6 @@ export const LOOKUP_RULES = [
       const login = m[1].toLowerCase();
       return { login, query: `${PERSONAL_CONTAINER_PREFIX}${login}` };
     },
-  },
-  {
-    // Totes / carts / pallets: tsX…, csX…, paX…
-    kind: 'container',
-    type: 'tote',
-    label: 'Tote',
-    match: /^(?:ts|cs|pa)X[a-z0-9]+$/i,
-    build: (m) => ({ query: m[0] }),
   },
   {
     // ASIN, e.g. B0CV7PGS46
@@ -76,7 +111,9 @@ const FALLBACK_RULE = { kind: 'container', type: 'container', label: 'Container'
  * @returns {{ kind: string, type: string, label: string, query: string, login?: string } | null}
  */
 export function classifyLookupInput(raw) {
-  const value = (raw ?? '').trim();
+  // A Turkish keyboard with Caps Lock on types "İ" for the i key (and "ı"
+  // for I), which no barcode or login contains.
+  const value = (raw ?? '').trim().replace(/İ/g, 'I').replace(/ı/g, 'i');
   if (!value) return null;
 
   for (const rule of LOOKUP_RULES) {
