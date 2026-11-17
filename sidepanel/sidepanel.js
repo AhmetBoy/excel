@@ -11,6 +11,7 @@ import {
   cellHighlightClass,
   dropZoneColumnClass,
   evaluateTote,
+  TOTE_SCAN_CODE,
   hasNotPermitted,
   isMoveNeeded,
 } from '../shared/toteChecks.js';
@@ -233,6 +234,54 @@ function prepareForNextScan() {
   toteInput.focus();
 }
 
+// Totes and csX can be opened at a Receive station to clear "Tote Taraması".
+const RECEIVE_OPENABLE = /^(ts|cs)x/i;
+
+/**
+ * "Receive'de aç" button: opens the tote as the PRIMARY container at a free
+ * Receive station (background tries the stations in order) and stops there.
+ */
+function buildReceiveOpener(toteNumber) {
+  const box = document.createElement('div');
+  box.className = 'receive-opener';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = "Receive'de aç";
+  const status = document.createElement('div');
+  status.className = 'receive-status';
+  status.hidden = true;
+
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    status.hidden = false;
+    status.className = 'receive-status';
+    status.textContent = `${toteNumber} Receive'de açılıyor…`;
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'RECEIVE_OPEN_TOTE', toteNumber });
+      if (!response) throw new Error('Arka plan betiğinden yanıt alınamadı.');
+      if (response.status === 'ok') {
+        const count = response.container?.itemCount;
+        status.classList.add('receive-ok');
+        status.textContent = `✔ ${toteNumber} ${response.workstation} masasında açıldı${
+          Number.isFinite(count) ? ` · ${count} ürün` : ''
+        }. Tote'u yeniden aratın.`;
+      } else {
+        status.classList.add('receive-error');
+        status.textContent = `✖ ${response.message ?? 'Açılamadı.'}`;
+        button.disabled = false;
+      }
+      if (response.log?.length) status.title = response.log.join(' → ');
+    } catch (error) {
+      status.classList.add('receive-error');
+      status.textContent = `✖ ${error?.message ?? error}`;
+      button.disabled = false;
+    }
+  });
+
+  box.append(button, status);
+  return box;
+}
+
 // Always evaluated on the full tote (lastRows), never the filtered view,
 // so typing in the filter box can't make a tote look ready.
 function renderToteVerdict(rows, options) {
@@ -259,6 +308,9 @@ function renderToteVerdict(rows, options) {
       el.className = `verdict verdict-${finding.level}`;
       const icon = { action: '✖', move: '➜', warn: '⚠', info: 'ℹ' }[finding.level] ?? '•';
       el.textContent = `${icon} ${finding.message}`;
+      if (finding.code === TOTE_SCAN_CODE && RECEIVE_OPENABLE.test(lastToteNumber)) {
+        el.appendChild(buildReceiveOpener(lastToteNumber));
+      }
       items.push(el);
     }
   }

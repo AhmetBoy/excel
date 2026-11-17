@@ -333,6 +333,30 @@ button:hover {
   font-weight: 400;
 }
 
+.receive-opener {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.receive-status {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333;
+}
+
+.receive-status.receive-ok {
+  color: #11631a;
+  font-weight: 700;
+}
+
+.receive-status.receive-error {
+  color: #8e1c12;
+  font-weight: 700;
+}
+
 .verdict-counts {
   font-size: 12px;
   color: #444;

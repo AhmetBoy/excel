@@ -109,6 +109,9 @@ export function sumQuantity(rows) {
   }, 0);
 }
 
+/** Finding code the panel uses to offer "Receive'de aç". */
+export const TOTE_SCAN_CODE = 'tote_scan';
+
 export function countVariety(rows) {
   return distinct(rows.map((row) => upper(row.fnSku) || upper(row.asin)).filter(Boolean)).length;
 }
@@ -207,6 +210,7 @@ export function evaluateTote(rows, { pandashOk = true } = {}) {
   if (toteScanFnSkus.length > 0) {
     findings.push({
       level: 'action',
+      code: TOTE_SCAN_CODE,
       message: 'Tote Taraması gerekiyor',
     });
   }

@@ -17,6 +17,7 @@ import { reachedCutoff } from '../shared/rozetWatch.js';
 import { fetchHistoryByDay } from '../shared/historyByDay.js';
 import { shiftOf } from '../shared/shifts.js';
 import { isFeatureAllowed } from '../shared/access.js';
+import { openToteInReceive } from './services/receiveService.js';
 
 // Without this, clicking the toolbar icon does nothing because there is
 // no action.default_popup - the side panel must be opened explicitly.
@@ -530,4 +531,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     );
 
   return true; // keep the message channel open for the async response
+});
+
+// "Tote Taraması gerekiyor" fix: opens the tote / csX as the PRIMARY
+// container at a free Receive station and stops there (nothing is received).
+// Only sent from the tote verdict's button, never automatically.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'RECEIVE_OPEN_TOTE') return undefined;
+
+  openToteInReceive(String(message.toteNumber ?? '').trim())
+    .then(sendResponse)
+    .catch((error) => sendResponse({ status: 'error', message: String(error?.message ?? error), log: [] }));
+
+  return true;
 });

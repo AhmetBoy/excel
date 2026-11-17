@@ -91,7 +91,7 @@ describe('evaluateTote', () => {
     ]);
     expect(messages(verdict)).toContain('Tote Taraması gerekiyor');
     expect(messages(verdict)).toContain('Tote Taraması gerekiyor');
-    expect(verdict.findings).toContainEqual({ level: 'action', message: 'Tote Taraması gerekiyor' });
+    expect(verdict.findings).toContainEqual({ level: 'action', code: 'tote_scan', message: 'Tote Taraması gerekiyor' });
   });
 
   it('does not ask for a tote scan when only the FCSku repeats', () => {
