@@ -1,5 +1,6 @@
 import {
   COLUMNS,
+  columnsForKind,
   dedupeDropZoneDisplay,
   describeSourceStatus,
   filterRows,
@@ -51,6 +52,7 @@ const TOAST_DURATION_MS = 2000;
 
 let lastRows = [];
 let lastToteNumber = '';
+let lastKind = 'container';
 let currentColumns = COLUMNS;
 let draggedColumnKey = null;
 let toastTimeoutId = null;
@@ -144,7 +146,7 @@ function moveColumn(draggedKey, targetKey) {
 
 function buildTableHead() {
   const tr = document.createElement('tr');
-  for (const column of currentColumns) {
+  for (const column of columnsForKind(currentColumns, lastKind)) {
     const th = document.createElement('th');
     th.textContent = column.label;
     th.draggable = true;
@@ -204,6 +206,7 @@ function renderSourceStatus(sourceStatus) {
     inventory: 'Inventory',
     pandash: 'Pandash',
     product: 'Ürün (HRV)',
+    prep: 'Prep',
     sideline: 'Sideline',
     qt: 'QT',
     history: 'Inventory History',
@@ -330,7 +333,8 @@ function applyFilterAndRender() {
     moveNeeded: isMoveNeeded(lastRows),
     columnClass: dropZoneColumnClass(lastRows),
   };
-  renderRows(resultsBodyEl, dedupeDropZoneDisplay(filtered), currentColumns, (row, key) =>
+  const columns = columnsForKind(currentColumns, lastKind);
+  renderRows(resultsBodyEl, dedupeDropZoneDisplay(filtered), columns, (row, key) =>
     key === 'hrv'
       ? row.highValue === true
         ? 'cell-hrv'
@@ -358,6 +362,8 @@ async function runLookup(toteNumber, kind = 'container') {
     }
 
     lastRows = response.rows ?? [];
+    lastKind = kind;
+    buildTableHead();
     renderSourceStatus(response.sourceStatus ?? {});
     const pandashStatus = response.sourceStatus?.pandash;
     // A failed (or partly failed) Pandash request leaves DropZones unknown;

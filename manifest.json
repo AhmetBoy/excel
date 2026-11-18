@@ -10,7 +10,8 @@
     "https://qt.eu.aftx.amazonoperations.app/*",
     "https://atlas.na.aftx.amazonoperations.app/*",
     "https://aft-poirot-website.eu.aftx.amazonoperations.app/*",
-    "https://receive.eu.aftx.amazonoperations.app/*"
+    "https://receive.eu.aftx.amazonoperations.app/*",
+    "https://prepmanager.eu.aftx.amazonoperations.app/*"
   ],
   "background": {
     "service_worker": "background/background.js",

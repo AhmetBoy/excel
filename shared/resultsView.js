@@ -6,6 +6,7 @@ export const COLUMNS = [
   { key: 'disposition', label: 'Disposition' },
   { key: 'binDescription', label: 'Bin Description' },
   { key: 'hrv', label: 'HRV' },
+  { key: 'prep', label: 'Prep', productOnly: true },
   { key: 'container', label: 'Container' },
   { key: 'asin', label: 'ASIN' },
   { key: 'fnSku', label: 'FNSku' },
@@ -85,6 +86,27 @@ export function describeHrv(row) {
   return row.asin ? '?' : '-';
 }
 
+/**
+ * Prep column text: the instruction as written in Prep Instructions Manager,
+ * "-" when none is set, "?" when the page couldn't be read.
+ * @param {object} row
+ * @returns {string}
+ */
+export function describePrep(row) {
+  if (row.prep) return row.prep;
+  if (row.prep === '') return '-';
+  return row.asin ? '?' : '-';
+}
+
+/**
+ * Columns shown for a kind of scan: Prep is only fetched for a product scan.
+ * @param {{key: string, label: string, productOnly?: boolean}[]} columns
+ * @param {string} kind - 'container' | 'location' | 'product'
+ */
+export function columnsForKind(columns, kind) {
+  return kind === 'product' ? columns : columns.filter((column) => !column.productOnly);
+}
+
 /** True when any product of the result is High Value. */
 export function hasHighValue(rows) {
   return (rows ?? []).some((row) => row.highValue === true);
@@ -93,6 +115,7 @@ export function hasHighValue(rows) {
 const CELL_RENDERERS = {
   dataStatus: describeDataStatus,
   hrv: describeHrv,
+  prep: describePrep,
 };
 
 /**

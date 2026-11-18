@@ -55,6 +55,7 @@ function disambiguateByTitleAndQuantity(candidates, inventoryRecord) {
  * @param {Array<object>} input.pandashMatches - from matchPandashResultsToAsins()
  * @param {Array<object>} [input.sidelineMatches] - { asin, binDescription } per ASIN, from Sideline
  * @param {Array<object>} [input.productMatches] - { asin, highValue, imageUrl } per ASIN, from FC Research product
+ * @param {Array<object>} [input.prepMatches] - { asin, prep } per ASIN, from Prep Instructions Manager
  * @param {Array<object>} input.qtProducts - from parseQtDatelotHtml().products
  * @returns {{ rows: Array<object>, matchedQtCount: number, totalQtCount: number }}
  */
@@ -63,6 +64,7 @@ export function buildResultRows({
   pandashMatches = [],
   sidelineMatches = [],
   productMatches = [],
+  prepMatches = [],
   qtProducts = [],
 }) {
   const usedQtProducts = new Set();
@@ -71,6 +73,7 @@ export function buildResultRows({
     const pandash = findMatchByAsin(pandashMatches, inv.asin);
     const sideline = findMatchByAsin(sidelineMatches, inv.asin);
     const product = findMatchByAsin(productMatches, inv.asin);
+    const prep = findMatchByAsin(prepMatches, inv.asin);
 
     let qtMatchStatus = 'no_fcsku';
     let qtProduct = null;
@@ -107,6 +110,7 @@ export function buildResultRows({
       binDescription: sideline?.binDescription ?? null,
       highValue: product?.highValue ?? null,
       imageUrl: product?.imageUrl ?? null,
+      prep: prep?.prep ?? null,
       owner: qtProduct?.owner ?? null,
       expirationDate: qtProduct?.expirationDate ?? null,
       qtMatchStatus,
@@ -130,6 +134,7 @@ export function buildResultRows({
       binDescription: null,
       highValue: null,
       imageUrl: null,
+      prep: null,
       owner: p.owner,
       expirationDate: p.expirationDate,
       qtMatchStatus: 'qt_only_unmatched',

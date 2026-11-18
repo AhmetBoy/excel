@@ -5,6 +5,7 @@ import { parseInventoryHtml } from '../shared/parsers/inventoryParser.js';
 import { parseContainerHierarchyHtml } from '../shared/parsers/containerHierarchyParser.js';
 import { parseInventoryHistoryHtml } from '../shared/parsers/inventoryHistoryParser.js';
 import { parseProductHtml } from '../shared/parsers/productParser.js';
+import { parsePrepHtml } from '../shared/parsers/prepParser.js';
 
 const PARSERS = {
   PARSE_INVENTORY_HTML: {
@@ -22,6 +23,10 @@ const PARSERS = {
   PARSE_PRODUCT_HTML: {
     parse: parseProductHtml,
     empty: { found: false, highValue: null, imageUrl: null, title: null },
+  },
+  PARSE_PREP_HTML: {
+    parse: parsePrepHtml,
+    empty: { found: false, instructions: [] },
   },
 };
 

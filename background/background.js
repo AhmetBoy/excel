@@ -7,6 +7,7 @@ import { fetchAtlasReportRaw } from './services/atlasService.js';
 import { parseAtlasProcessReports } from '../shared/parsers/atlasReportParser.js';
 import { fetchFcResearchSection, fetchFcResearchSectionMore } from './services/fcResearchService.js';
 import { fetchSidelineItem } from './services/sidelineService.js';
+import { fetchPrepView } from './services/prepService.js';
 import { parseSidelineResponse } from '../shared/parsers/sidelineParser.js';
 import { hasMorePages } from '../shared/parsers/containerHierarchyParser.js';
 import { analyzeStowErrors, buildHistoryDateFields } from '../shared/stowErrors.js';
@@ -189,6 +190,35 @@ async function resolveProducts(asins, cache = new Map()) {
   return { matches, status };
 }
 
+const MAX_PARALLEL_PREP_REQUESTS = 4;
+const B_ASIN = /^B[A-Z0-9]{9}$/;
+
+/**
+ * Prep instruction per B ASIN. `prep` is the instruction text, '' when the
+ * product needs no prep and null when the page couldn't be read.
+ *
+ * @param {string[]} asins
+ * @returns {Promise<{ matches: Array<{asin: string, prep: string|null, status: string}>, status: string }>}
+ */
+async function resolvePrep(asins) {
+  const bAsins = [...new Set(asins.map((asin) => asin.trim().toUpperCase()))].filter((asin) => B_ASIN.test(asin));
+  if (bAsins.length === 0) return { matches: [], status: 'skipped_no_asin' };
+
+  const matches = await mapWithConcurrency(bAsins, MAX_PARALLEL_PREP_REQUESTS, async (asin) => {
+    const response = await fetchPrepView(asin);
+    if (response.status !== 'ok') return { asin, prep: null, status: response.status };
+    const parsed = await parseViaOffscreen('PARSE_PREP_HTML', response.html);
+    if (!parsed.found) return { asin, prep: null, status: 'unexpected_response' };
+    return { asin, prep: parsed.instructions.join(', '), status: 'ok' };
+  });
+
+  const failed = matches.filter((m) => m.status !== 'ok');
+  let status = 'ok';
+  if (failed.length === matches.length) status = failed[0].status;
+  else if (failed.length > 0) status = 'partial_failure';
+  return { matches, status };
+}
+
 /** Inventory History of a bin, for "who stowed this product here". */
 async function resolveLocationHistory(location) {
   const result = await fetchPagedSection(
@@ -205,11 +235,12 @@ async function resolveLocationHistory(location) {
 const SIDELINE_TEMP_CONTAINER = 'csXhg2ggqxb';
 
 // Which extra sources run for each kind of scan (see shared/lookupInput.js).
-// QT works on a tote only; a bin search skips Sideline too.
+// QT works on a tote only; a bin search skips Sideline too. Prep is asked
+// for a scanned product only, never for each product of a tote or bin.
 const SOURCE_PLAN = {
-  container: { sideline: true, qt: true, history: false },
-  location: { sideline: false, qt: false, history: true },
-  product: { sideline: true, sidelineContainer: SIDELINE_TEMP_CONTAINER, qt: false, history: false },
+  container: { sideline: true, qt: true, history: false, prep: false },
+  location: { sideline: false, qt: false, history: true, prep: false },
+  product: { sideline: true, sidelineContainer: SIDELINE_TEMP_CONTAINER, qt: false, history: false, prep: true },
 };
 
 const skipped = (extra) => Promise.resolve({ status: 'skipped', ...extra });
@@ -229,7 +260,7 @@ async function lookupTote(toteNumber, kind = 'container') {
   const inventory = await resolveInventory(toteNumber);
   const distinctAsins = [...new Set(inventory.records.map((r) => r.asin).filter(Boolean))];
 
-  const [pandash, product, sideline, qt, history] = await Promise.all([
+  const [pandash, product, sideline, qt, history, prep] = await Promise.all([
     resolvePandash(distinctAsins),
     resolveProducts(distinctAsins),
     plan.sideline
@@ -237,6 +268,7 @@ async function lookupTote(toteNumber, kind = 'container') {
       : skipped({ matches: [] }),
     plan.qt ? resolveQt(toteNumber) : skipped({ products: [] }),
     plan.history ? resolveLocationHistory(toteNumber) : skipped({ records: [] }),
+    plan.prep ? resolvePrep(distinctAsins) : skipped({ matches: [] }),
   ]);
 
   const { rows } = buildResultRows({
@@ -244,6 +276,7 @@ async function lookupTote(toteNumber, kind = 'container') {
     pandashMatches: pandash.matches,
     sidelineMatches: sideline.matches,
     productMatches: product.matches,
+    prepMatches: prep.matches,
     qtProducts: qt.products,
   });
 
@@ -255,6 +288,7 @@ async function lookupTote(toteNumber, kind = 'container') {
   if (plan.sideline) sourceStatus.sideline = sideline.status;
   if (plan.qt) sourceStatus.qt = qt.status;
   if (plan.history) sourceStatus.history = history.status;
+  if (plan.prep) sourceStatus.prep = prep.status;
 
   return { toteNumber, kind, rows, sourceStatus, locationHistory: history.records };
 }

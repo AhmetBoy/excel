@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   COLUMNS,
+  columnsForKind,
   dedupeDropZoneDisplay,
   describeDataStatus,
+  describePrep,
   describeSourceStatus,
   filterRows,
   reorderColumns,
@@ -22,6 +24,27 @@ describe('describeDataStatus', () => {
   it('combines multiple warnings', () => {
     const row = { pandashStatus: 'not_in_response', qtMatchStatus: 'no_fcsku' };
     expect(describeDataStatus(row)).toBe('Pandash: Bulunamadı, QT: FCSku yok');
+  });
+});
+
+describe('describePrep', () => {
+  it('writes the instruction exactly as given', () => {
+    expect(describePrep({ asin: 'B0A', prep: 'Torbalama' })).toBe('Torbalama');
+  });
+
+  it('shows "-" when no prep is set and "?" when it could not be read', () => {
+    expect(describePrep({ asin: 'B0A', prep: '' })).toBe('-');
+    expect(describePrep({ asin: 'B0A', prep: null })).toBe('?');
+  });
+});
+
+describe('columnsForKind', () => {
+  const keys = (kind) => columnsForKind(COLUMNS, kind).map((c) => c.key);
+
+  it('shows the Prep column for a product scan only', () => {
+    expect(keys('product')).toContain('prep');
+    expect(keys('container')).not.toContain('prep');
+    expect(keys('location')).not.toContain('prep');
   });
 });
 

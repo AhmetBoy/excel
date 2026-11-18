@@ -28,6 +28,24 @@ describe('buildResultRows', () => {
     expect(rows[0].pandashStatus).toBe('found');
   });
 
+  it('attaches the prep instruction by ASIN and leaves other products unknown', () => {
+    const { rows } = buildResultRows({
+      inventoryRecords: [inv(), inv({ asin: 'B0B' })],
+      prepMatches: [{ asin: 'B0A', prep: 'Torbalama', status: 'ok' }],
+    });
+
+    expect(rows.map((r) => r.prep)).toEqual(['Torbalama', null]);
+  });
+
+  it('keeps an empty prep (no instructions set) apart from an unknown one', () => {
+    const { rows } = buildResultRows({
+      inventoryRecords: [inv()],
+      prepMatches: [{ asin: 'B0A', prep: '', status: 'ok' }],
+    });
+
+    expect(rows[0].prep).toBe('');
+  });
+
   it('surfaces an explicit status when pandash has no data for the ASIN', () => {
     const { rows } = buildResultRows({
       inventoryRecords: [inv()],
