@@ -59,6 +59,11 @@ describe('classifyLookupInput', () => {
     expect(classifyLookupInput('p-1-a200a100')).toMatchObject({ kind: 'location', query: 'P-1-A200A100' });
   });
 
+  it('expands a 4-digit number to a tsXSA90 tote', () => {
+    expect(classifyLookupInput(' 3245 ')).toMatchObject({ kind: 'container', type: 'tote', query: 'tsXSA903245' });
+    expect(classifyLookupInput('32456')).toMatchObject({ type: 'container', query: '32456' });
+  });
+
   it('falls back to a container for any other id with a digit', () => {
     for (const value of ['123456789012', 'TOT0001']) {
       expect(classifyLookupInput(value)).toMatchObject({ kind: 'container', query: value });

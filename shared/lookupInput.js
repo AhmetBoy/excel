@@ -36,6 +36,14 @@ export const LOOKUP_RULES = [
     build: (m) => ({ query: normalizeTote('tsX', m[0].slice(3)) }),
   },
   {
+    // Shorthand: the last 4 digits of a tote (3245 -> tsXSA903245).
+    kind: 'container',
+    type: 'tote',
+    label: 'Tote',
+    match: /^\d{4}$/,
+    build: (m) => ({ query: `tsXSA90${m[0]}` }),
+  },
+  {
     // Cart: csX + exactly 8 characters (csXhbyjrsav, csXhhniwq73).
     kind: 'container',
     type: 'tote',
