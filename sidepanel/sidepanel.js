@@ -201,7 +201,7 @@ function badgeClass(status) {
   return 'warn';
 }
 
-function renderSourceStatus(sourceStatus) {
+function renderSourceStatus(sourceStatus, sourceMessages = {}) {
   const labels = {
     inventory: 'Inventory',
     pandash: 'Pandash',
@@ -216,6 +216,10 @@ function renderSourceStatus(sourceStatus) {
       const badge = document.createElement('span');
       badge.className = `status-badge ${badgeClass(status)}`;
       badge.textContent = `${labels[key] ?? key}: ${describeSourceStatus(status)}`;
+      if (sourceMessages[key]) {
+        badge.title = sourceMessages[key];
+        badge.textContent += ' ⓘ';
+      }
       return badge;
     })
   );
@@ -364,14 +368,14 @@ async function runLookup(toteNumber, kind = 'container') {
     lastRows = response.rows ?? [];
     lastKind = kind;
     buildTableHead();
-    renderSourceStatus(response.sourceStatus ?? {});
+    renderSourceStatus(response.sourceStatus ?? {}, response.sourceMessages ?? {});
     const pandashStatus = response.sourceStatus?.pandash;
     // A failed (or partly failed) Pandash request leaves DropZones unknown;
     // only a real "no value" answer may be read as NOT_PERMITTED.
     const pandashOk = !ERROR_STATUSES.has(pandashStatus) && pandashStatus !== 'partial_failure';
     // Stow-readiness rules are about a tote; a bin or product search skips them.
     const isTote = kind === 'container';
-    renderToteVerdict(isTote ? lastRows : [], { pandashOk });
+    renderToteVerdict(isTote ? lastRows : [], { pandashOk, qtStatus: response.sourceStatus?.qt });
     filterBarEl.hidden = false;
     resultsWrapperEl.hidden = false;
     applyFilterAndRender();

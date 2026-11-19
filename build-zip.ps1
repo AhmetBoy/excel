@@ -10,7 +10,7 @@ New-Item -ItemType Directory -Force dist | Out-Null
 $zip = "dist\tote-lookup-assistant-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip -Confirm:$false }
 
-$include = @('manifest.json', 'icons', 'background', 'content-scripts', 'offscreen', 'shared', 'sidepanel')
+$include = @('manifest.json', 'icons', 'background', 'offscreen', 'shared', 'sidepanel')
 
 # Windows'un tar.exe'si ZIP icinde '/' ayiracini kullanir (Compress-Archive '\' kullanir ve magaza bunu reddedebilir).
 tar.exe -a -c -f $zip @include

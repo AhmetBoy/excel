@@ -1,4 +1,5 @@
 import { isBlank, normalizeValue } from './normalize.js';
+import { classifyExpiration } from './expiration.js';
 
 const READY_CONSUMER = 'UNOWNED';
 const EDIT_CONSUMER = 'PENDING_RESEARCH';
@@ -112,6 +113,56 @@ export function sumQuantity(rows) {
 /** Finding code the panel uses to offer "Receive'de aç". */
 export const TOTE_SCAN_CODE = 'tote_scan';
 
+/** Finding codes for the SKT rules (the panel may offer SKT entry on them). */
+export const SKT_MISSING_CODE = 'skt_missing';
+export const SKT_EXPIRED_CODE = 'skt_expired';
+
+// QT statuses after which the datelot list is known (empty or not).
+const QT_KNOWN_STATUSES = new Set(['ok', 'no_datelot_screen']);
+
+// Rows that carry a QT datelot record, i.e. whose date was actually read.
+function hasQtRecord(row) {
+  return row.qtMatchStatus === 'matched' || row.qtMatchStatus === 'qt_only_unmatched';
+}
+
+function expirationFindings(rows, qtStatus, now) {
+  if (qtStatus === undefined) return []; // QT not asked for this lookup
+  if (!QT_KNOWN_STATUSES.has(qtStatus)) {
+    return [{ level: 'warn', message: 'QT verisi alınamadı, SKT kontrol edilemedi' }];
+  }
+
+  const byClass = { missing: [], expired: [], near: [], unreadable: [] };
+  for (const row of rows.filter(hasQtRecord)) {
+    const cls = classifyExpiration(row.expirationDate, now);
+    if (cls in byClass) byClass[cls].push(row);
+  }
+
+  const findings = [];
+  if (byClass.missing.length > 0) {
+    findings.push({
+      level: 'action',
+      code: SKT_MISSING_CODE,
+      message: `SKT girilmeli — ${byClass.missing.length} üründe SKT yok`,
+    });
+  }
+  const late = [...byClass.expired, ...byClass.near];
+  if (late.length > 0) {
+    const parts = [];
+    if (byClass.expired.length > 0) parts.push(`${byClass.expired.length} geçmiş`);
+    if (byClass.near.length > 0) parts.push(`${byClass.near.length} çok yaklaşmış`);
+    findings.push({
+      level: 'action',
+      code: SKT_EXPIRED_CODE,
+      message: `SKT geçmiş / çok yaklaşmış — ${parts.join(', ')}`,
+    });
+  }
+  if (byClass.unreadable.length > 0) {
+    const values = distinct(byClass.unreadable.map((row) => normalizeValue(row.expirationDate)));
+    findings.push({ level: 'warn', message: `SKT okunamadı: ${values.join(', ')}` });
+  }
+  return findings;
+}
+
 export function countVariety(rows) {
   return distinct(rows.map((row) => upper(row.fnSku) || upper(row.asin)).filter(Boolean)).length;
 }
@@ -124,19 +175,21 @@ export function countVariety(rows) {
  * user (products in picking or still in Problem Solve). `ready` is true only when there are no
  * findings at all, since a non-UNOWNED consumer is never stow-ready.
  *
- * Expiration Date (SKT) checks depend on QT data and are not part of this
- * evaluation yet.
+ * Expiration Date (SKT), from QT (`qtStatus` = sourceStatus.qt; leave it
+ * undefined when QT wasn't asked): no SKT -> "SKT girilmeli"; before today
+ * or within 3 months -> "SKT geçmiş / çok yaklaşmış". If QT failed the SKT
+ * is unknown and reported as a warning, so the tote is not shown as ready.
  *
  * A missing DropZone is only read as NOT_PERMITTED when Pandash itself
  * answered (`pandashOk`); if the Pandash request failed, missing values
  * mean "unknown", not NOT_PERMITTED, and are reported as a warning.
  *
  * @param {object[]} rows - from buildResultRows().rows
- * @param {{ pandashOk?: boolean }} [options]
+ * @param {{ pandashOk?: boolean, qtStatus?: string, now?: Date }} [options]
  * @returns {{ ready: boolean, findings: {level: 'action'|'move'|'warn'|'info', message: string}[],
  *   totalQuantity: number, variety: number } | null} null when there are no rows
  */
-export function evaluateTote(rows, { pandashOk = true } = {}) {
+export function evaluateTote(rows, { pandashOk = true, qtStatus, now = new Date() } = {}) {
   const inventoryRows = inventoryRowsOf(rows ?? []);
   if (inventoryRows.length === 0) return null;
 
@@ -215,6 +268,8 @@ export function evaluateTote(rows, { pandashOk = true } = {}) {
     });
   }
 
+  findings.push(...expirationFindings(inventoryRows, qtStatus, now));
+
   return {
     ready: findings.length === 0,
     findings,
@@ -228,10 +283,16 @@ export function evaluateTote(rows, { pandashOk = true } = {}) {
  * rules above, so the offending value stands out in the row too.
  * @param {object} row
  * @param {string} columnKey
- * @param {{ moveNeeded: boolean, columnClass?: string|null }} context - columnClass from dropZoneColumnClass()
+ * @param {{ moveNeeded: boolean, columnClass?: string|null, now?: Date }} context - columnClass from dropZoneColumnClass()
  * @returns {string|null}
  */
-export function cellHighlightClass(row, columnKey, { moveNeeded, columnClass = null }) {
+export function cellHighlightClass(row, columnKey, { moveNeeded, columnClass = null, now = new Date() }) {
+  if (columnKey === 'expirationDate') {
+    if (!hasQtRecord(row)) return null;
+    const cls = classifyExpiration(row.expirationDate, now);
+    if (cls === 'missing' || cls === 'expired' || cls === 'near') return 'cell-action';
+    return cls === 'unreadable' ? 'cell-warn' : null;
+  }
   if (columnKey === 'consumer') {
     const consumer = upper(row.consumer);
     if (consumer === EDIT_CONSUMER) return 'cell-action';

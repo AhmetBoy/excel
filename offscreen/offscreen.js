@@ -6,6 +6,7 @@ import { parseContainerHierarchyHtml } from '../shared/parsers/containerHierarch
 import { parseInventoryHistoryHtml } from '../shared/parsers/inventoryHistoryParser.js';
 import { parseProductHtml } from '../shared/parsers/productParser.js';
 import { parsePrepHtml } from '../shared/parsers/prepParser.js';
+import { parseQtPage } from '../shared/parsers/qtDatelotParser.js';
 
 const PARSERS = {
   PARSE_INVENTORY_HTML: {
@@ -27,6 +28,10 @@ const PARSERS = {
   PARSE_PREP_HTML: {
     parse: parsePrepHtml,
     empty: { found: false, instructions: [] },
+  },
+  PARSE_QT_PAGE: {
+    parse: parseQtPage,
+    empty: { found: false, objectId: null, screen: null, hasTextInput: false, actions: [], products: [], messages: [] },
   },
 };
 

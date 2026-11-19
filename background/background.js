@@ -26,13 +26,11 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error('[tote-lookup] setPanelBehavior failed:', error));
 
-// chrome.storage.session defaults to TRUSTED_CONTEXTS only (background/
-// offscreen), so content scripts can't read/write it unless this is
-// called once from a trusted context. qtContentScript.js relies on this
-// to persist lookup state across the page navigation that submitting the
-// QT tote search triggers.
+// Earlier versions opened chrome.storage.session to content scripts for the
+// QT tab script; QT now runs from the background, so put it back to the
+// default (trusted contexts only) - it holds the login session.
 chrome.storage.session
-  .setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })
+  .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
   .catch((error) => console.error('[tote-lookup] storage setAccessLevel failed:', error));
 
 // The service worker has no DOM, so DOMParser (used by inventoryParser.js)
@@ -147,12 +145,15 @@ async function resolveSideline(toteNumber, asins) {
 }
 
 async function resolveQt(toteNumber) {
-  const response = await fetchQtDatelotForTote(toteNumber);
+  const response = await fetchQtDatelotForTote(toteNumber, {
+    parsePage: (html) => parseViaOffscreen('PARSE_QT_PAGE', html),
+  });
   if (response.status !== 'ok') {
     return { products: [], status: response.status, message: response.message };
   }
   const products = response.products ?? [];
-  return { products, status: products.length > 0 ? 'ok' : 'no_datelot_screen' };
+  if (products.length > 0) return { products, status: 'ok' };
+  return { products, status: 'no_datelot_screen', message: `View Datelot Items butonu yok — ${response.message ?? ''}` };
 }
 
 const MAX_PARALLEL_PRODUCT_REQUESTS = 4;
@@ -290,7 +291,11 @@ async function lookupTote(toteNumber, kind = 'container') {
   if (plan.history) sourceStatus.history = history.status;
   if (plan.prep) sourceStatus.prep = prep.status;
 
-  return { toteNumber, kind, rows, sourceStatus, locationHistory: history.records };
+  // Why a source failed, shown as the badge's tooltip (only QT sends one).
+  const sourceMessages = {};
+  if (plan.qt && qt.message) sourceMessages.qt = qt.message;
+
+  return { toteNumber, kind, rows, sourceStatus, sourceMessages, locationHistory: history.records };
 }
 
 // Safety cap on "-more" pages of one FC Research section.

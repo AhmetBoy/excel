@@ -8,6 +8,21 @@ function loadFixture(name) {
 }
 
 describe('parseQtDatelotHtml', () => {
+  it('reads the real QT "Select item" page (skt.txt)', () => {
+    const result = parseQtDatelotHtml(loadFixture('qt-select-item-real.html'));
+
+    expect(result.found).toBe(true);
+    expect(result.products).toEqual([
+      {
+        title: "K2r 5 'i 1 Arada Çamaşır Makinesi Temizleyicisi 2 Kullanımlık (1 x 163 g)",
+        fcSku: 'ZZV1OUR8NU',
+        quantity: '2',
+        owner: 'UNOWNED',
+        expirationDate: 'Apr 10 2029',
+      },
+    ]);
+  });
+
   it('parses multiple products from the datelot fieldset', () => {
     const html = loadFixture('qt-datelot-multi-item.html');
     const result = parseQtDatelotHtml(html);

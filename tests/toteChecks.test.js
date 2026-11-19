@@ -204,3 +204,50 @@ describe('isMoveNeeded', () => {
     expect(isMoveNeeded([readyRow(), readyRow({ dropZone: 'HAZMAT' })])).toBe(true);
   });
 });
+
+describe('evaluateTote SKT rules', () => {
+  const NOW = new Date(2026, 10, 19);
+  const dated = (expirationDate, overrides = {}) => readyRow({ qtMatchStatus: 'matched', expirationDate, ...overrides });
+  const codes = (verdict) => verdict.findings.map((f) => f.code).filter(Boolean);
+
+  it('keeps a tote ready when every SKT is far enough away', () => {
+    const verdict = evaluateTote([dated('Apr 10 2029')], { qtStatus: 'ok', now: NOW });
+    expect(verdict.ready).toBe(true);
+  });
+
+  it('asks for an SKT when QT shows none', () => {
+    const verdict = evaluateTote([dated('None')], { qtStatus: 'ok', now: NOW });
+    expect(verdict.ready).toBe(false);
+    expect(codes(verdict)).toEqual(['skt_missing']);
+    expect(messages(verdict)).toContain('SKT girilmeli');
+  });
+
+  it('flags expired and near SKTs together', () => {
+    const verdict = evaluateTote(
+      [dated('Nov 1 2026'), dated('Jan 5 2027', { fnSku: 'FNB', fcSku: 'FCB' })],
+      { qtStatus: 'ok', now: NOW }
+    );
+    expect(codes(verdict)).toEqual(['skt_expired']);
+    expect(messages(verdict)).toContain('SKT geçmiş / çok yaklaşmış — 1 geçmiş, 1 çok yaklaşmış');
+  });
+
+  it('ignores rows without a QT record (not date-tracked)', () => {
+    const verdict = evaluateTote([readyRow({ qtMatchStatus: 'no_qt_data' })], { qtStatus: 'ok', now: NOW });
+    expect(verdict.ready).toBe(true);
+  });
+
+  it('is not ready when QT failed, and silent when QT was not asked', () => {
+    expect(evaluateTote([readyRow()], { qtStatus: 'no_qt_tab' }).ready).toBe(false);
+    expect(messages(evaluateTote([readyRow()], { qtStatus: 'error' }))).toContain('SKT kontrol edilemedi');
+    expect(evaluateTote([readyRow()], { qtStatus: 'no_datelot_screen' }).ready).toBe(true);
+    expect(evaluateTote([readyRow()]).ready).toBe(true);
+  });
+
+  it('highlights the Expiration Date cell', () => {
+    const ctx = { moveNeeded: false, now: NOW };
+    expect(cellHighlightClass(dated('Nov 1 2026'), 'expirationDate', ctx)).toBe('cell-action');
+    expect(cellHighlightClass(dated('None'), 'expirationDate', ctx)).toBe('cell-action');
+    expect(cellHighlightClass(dated('Apr 10 2029'), 'expirationDate', ctx)).toBeNull();
+    expect(cellHighlightClass(readyRow(), 'expirationDate', ctx)).toBeNull();
+  });
+});

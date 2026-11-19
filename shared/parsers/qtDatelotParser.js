@@ -63,3 +63,74 @@ export function parseQtDatelotHtml(html) {
 
   return { found: true, products };
 }
+
+function readAState(doc, key) {
+  for (const script of doc.querySelectorAll('script[type="a-state"]')) {
+    try {
+      if (JSON.parse(script.getAttribute('data-a-state') ?? '{}').key === key) {
+        return JSON.parse(script.textContent);
+      }
+    } catch {
+      // not this one
+    }
+  }
+  return null;
+}
+
+/**
+ * Reads one full QT EditItems page (GET /app/edititems?experience=Desktop),
+ * whatever step the server-side workflow is on.
+ *
+ * - objectId / instructionId: the workflow id every /action and /status call
+ *   sends (from <script type="a-state" data-a-state='{"key":"id"}'>)
+ * - screen: the step's heading, e.g. "Select item"
+ * - hasTextInput: the step asks for a typed value (the tote scan screen)
+ * - actions: every button's action name (data-click-action), e.g. "Done",
+ *   "ViewDatelotItems"
+ * - products: datelot items when the step is the item list (only dl's with
+ *   an FCSku or an Expiration date count)
+ *
+ * @param {string} html
+ */
+export function parseQtPage(html) {
+  const doc = new DOMParser().parseFromString(html ?? '', 'text/html');
+  const id = readAState(doc, 'id');
+  const workflow = doc.querySelector('#workflow');
+  const heading = workflow?.querySelector('.aft-tool-action-box h1') ?? workflow?.querySelector('h1');
+
+  const actions = [];
+  for (const el of (workflow ?? doc).querySelectorAll('[data-click-action]')) {
+    try {
+      const action = JSON.parse(el.getAttribute('data-click-action')).action;
+      if (action && !actions.includes(action)) actions.push(action);
+    } catch {
+      // ignore malformed attribute
+    }
+  }
+
+  const hasTextInput = Boolean(
+    workflow?.querySelector('form input[type="text"], form input[type="search"], form input:not([type])')
+  );
+
+  const products = Array.from(doc.querySelectorAll('fieldset dl.a-definition-list'))
+    .map(parseDefinitionList)
+    .filter((p) => p.fcSku || p.expirationDate);
+
+  // Visible error/warning boxes in the step itself (not the hidden status templates).
+  const messages = Array.from(workflow?.querySelectorAll('.aft-tool-warn-box, .aft-tool-critical-box, .a-alert-content') ?? [])
+    .filter((el) => !el.closest('.aft-tool-hide'))
+    .map((el) => normalizeValue(el.textContent))
+    .filter(Boolean);
+
+  return {
+    found: Boolean(id?.objectId),
+    objectId: id?.objectId ?? null,
+    instructionId: id?.instructionId ?? null,
+    status: id?.status ?? null,
+    screen: normalizeValue(heading?.textContent ?? '') || null,
+    hasTextInput,
+    actions,
+    products,
+    messages,
+  };
+}

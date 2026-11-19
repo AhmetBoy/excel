@@ -3,7 +3,7 @@
   "name": "Warehouse Tote Lookup Assistant",
   "version": "0.1.0",
   "description": "Read-only helper that merges tote/product data from Inventory, Pandash, and QT into a single view. Does not modify inventory; the only write is opening a tote at a Receive station on request (no receive/stow/cancel).",
-  "permissions": ["tabs", "sidePanel", "offscreen", "storage", "unlimitedStorage", "clipboardWrite", "alarms", "notifications"],
+  "permissions": ["sidePanel", "offscreen", "storage", "unlimitedStorage", "clipboardWrite", "alarms", "notifications"],
   "host_permissions": [
     "https://qifcr.eu.aftx.amazonoperations.app/*",
     "https://pandash.eu.aftx.amazonoperations.app/*",
@@ -17,13 +17,6 @@
     "service_worker": "background/background.js",
     "type": "module"
   },
-  "content_scripts": [
-    {
-      "matches": ["https://qt.eu.aftx.amazonoperations.app/*"],
-      "js": ["content-scripts/qtContentScript.js"],
-      "run_at": "document_idle"
-    }
-  ],
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"
   },
