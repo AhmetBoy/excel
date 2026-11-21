@@ -26,6 +26,7 @@ const SOURCE_STATUS_LABELS = {
   skipped_no_asin: 'ASIN yok, atlandı',
   partial_failure: 'Kısmen başarısız',
   no_datelot_screen: 'Datelot bilgisi gösterilmedi',
+  no_datelot_items: 'SKT takipli ürün yok',
   no_qt_tab: 'QT sekmesi açık değil',
   content_script_unreachable: 'QT sekmesine ulaşılamadı',
   auth_required: 'Oturum gerekli',

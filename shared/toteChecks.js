@@ -118,11 +118,27 @@ export const SKT_MISSING_CODE = 'skt_missing';
 export const SKT_EXPIRED_CODE = 'skt_expired';
 
 // QT statuses after which the datelot list is known (empty or not).
-const QT_KNOWN_STATUSES = new Set(['ok', 'no_datelot_screen']);
+const QT_KNOWN_STATUSES = new Set(['ok', 'no_datelot_items', 'no_datelot_screen']);
 
 // Rows that carry a QT datelot record, i.e. whose date was actually read.
 function hasQtRecord(row) {
   return row.qtMatchStatus === 'matched' || row.qtMatchStatus === 'qt_only_unmatched';
+}
+
+// SKT classes that explain an EXPIRED disposition / PENDING_RESEARCH consumer.
+const SKT_PROBLEM_CLASSES = new Set(['missing', 'expired', 'near']);
+
+/**
+ * Rows whose EXPIRED / PENDING_RESEARCH comes from their SKT: QT read a
+ * date for them and it is missing, past or near. For these the SKT finding
+ * alone tells what to do, so the generic EDIT messages are left out. Rows
+ * whose SKT is unknown (QT failed, no QT record) or fine keep them.
+ */
+function rowsExplainedBySkt(rows, qtStatus, now) {
+  if (!QT_KNOWN_STATUSES.has(qtStatus)) return new Set();
+  return new Set(
+    rows.filter((row) => hasQtRecord(row) && SKT_PROBLEM_CLASSES.has(classifyExpiration(row.expirationDate, now)))
+  );
 }
 
 function expirationFindings(rows, qtStatus, now) {
@@ -179,6 +195,10 @@ export function countVariety(rows) {
  * undefined when QT wasn't asked): no SKT -> "SKT girilmeli"; before today
  * or within 3 months -> "SKT geçmiş / çok yaklaşmış". If QT failed the SKT
  * is unknown and reported as a warning, so the tote is not shown as ready.
+ * A product whose SKT is missing / past / near gets only the SKT finding:
+ * its EXPIRED disposition and PENDING_RESEARCH consumer come from the SKT,
+ * so "EDIT — ... EXPIRED" and "EDIT yapılacak — PENDING_RESEARCH" are
+ * shown only for products whose SKT is unknown or fine.
  *
  * A missing DropZone is only read as NOT_PERMITTED when Pandash itself
  * answered (`pandashOk`); if the Pandash request failed, missing values
@@ -216,8 +236,11 @@ export function evaluateTote(rows, { pandashOk = true, qtStatus, now = new Date(
     findings.push({ level: 'move', message: `Move yapılacak — DropZone'lar farklı: ${dropZones.join(', ')}` });
   }
 
+  const explainedBySkt = rowsExplainedBySkt(inventoryRows, qtStatus, now);
+  const unexplainedRows = inventoryRows.filter((row) => !explainedBySkt.has(row));
+
   const consumers = inventoryRows.map((row) => upper(row.consumer));
-  if (consumers.includes(EDIT_CONSUMER)) {
+  if (unexplainedRows.some((row) => upper(row.consumer) === EDIT_CONSUMER)) {
     findings.push({ level: 'action', message: 'EDIT yapılacak — Consumer: PENDING_RESEARCH' });
   }
   if (consumers.includes(PICKING_CONSUMER)) {
@@ -244,7 +267,7 @@ export function evaluateTote(rows, { pandashOk = true, qtStatus, now = new Date(
   }
 
   const dispositions = inventoryRows.map((row) => upper(row.disposition));
-  if (dispositions.includes(EXPIRED_DISPOSITION)) {
+  if (unexplainedRows.some((row) => upper(row.disposition) === EXPIRED_DISPOSITION)) {
     findings.push({ level: 'action', message: "EDIT — Ürün SKT'si girilmesi gerekiyor — Disposition: EXPIRED" });
   }
   const otherDispositions = distinct(

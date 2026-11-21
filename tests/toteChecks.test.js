@@ -240,7 +240,43 @@ describe('evaluateTote SKT rules', () => {
     expect(evaluateTote([readyRow()], { qtStatus: 'no_qt_tab' }).ready).toBe(false);
     expect(messages(evaluateTote([readyRow()], { qtStatus: 'error' }))).toContain('SKT kontrol edilemedi');
     expect(evaluateTote([readyRow()], { qtStatus: 'no_datelot_screen' }).ready).toBe(true);
+    expect(evaluateTote([readyRow()], { qtStatus: 'no_datelot_items' }).ready).toBe(true);
     expect(evaluateTote([readyRow()]).ready).toBe(true);
+  });
+
+  it('shows only the SKT message when the SKT explains EXPIRED / PENDING_RESEARCH', () => {
+    const expired = evaluateTote(
+      [dated('Jan 5 2027', { disposition: 'EXPIRED', consumer: 'PENDING_RESEARCH' })],
+      { qtStatus: 'ok', now: NOW }
+    );
+    expect(messages(expired)).toBe('SKT geçmiş / çok yaklaşmış — 1 çok yaklaşmış');
+
+    const missing = evaluateTote([dated('None', { consumer: 'PENDING_RESEARCH' })], { qtStatus: 'ok', now: NOW });
+    expect(messages(missing)).toBe('SKT girilmeli — 1 üründe SKT yok');
+  });
+
+  it('keeps the EXPIRED / PENDING_RESEARCH messages when the SKT is unknown', () => {
+    const row = readyRow({ disposition: 'EXPIRED', consumer: 'PENDING_RESEARCH' });
+    const failed = messages(evaluateTote([row], { qtStatus: 'error' }));
+    expect(failed).toContain('Disposition: EXPIRED');
+    expect(failed).toContain('Consumer: PENDING_RESEARCH');
+
+    // QT answered but this product has no datelot record.
+    const noRecord = messages(evaluateTote([row], { qtStatus: 'ok', now: NOW }));
+    expect(noRecord).toContain('Disposition: EXPIRED');
+    expect(noRecord).toContain('Consumer: PENDING_RESEARCH');
+  });
+
+  it('keeps the messages of other products that the SKT does not explain', () => {
+    const verdict = evaluateTote(
+      [
+        dated('None', { consumer: 'PENDING_RESEARCH' }),
+        readyRow({ fnSku: 'FNB', fcSku: 'FCB', consumer: 'PENDING_RESEARCH' }),
+      ],
+      { qtStatus: 'ok', now: NOW }
+    );
+    expect(messages(verdict)).toContain('SKT girilmeli');
+    expect(messages(verdict)).toContain('Consumer: PENDING_RESEARCH');
   });
 
   it('highlights the Expiration Date cell', () => {

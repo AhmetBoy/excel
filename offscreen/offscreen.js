@@ -31,7 +31,7 @@ const PARSERS = {
   },
   PARSE_QT_PAGE: {
     parse: parseQtPage,
-    empty: { found: false, objectId: null, screen: null, hasTextInput: false, actions: [], products: [], messages: [] },
+    empty: { found: false, objectId: null, screen: null, hasTextInput: false, noDatelotItems: false, actions: [], products: [], messages: [] },
   },
 };
 

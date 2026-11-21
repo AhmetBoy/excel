@@ -85,6 +85,7 @@ function readAState(doc, key) {
  *   sends (from <script type="a-state" data-a-state='{"key":"id"}'>)
  * - screen: the step's heading, e.g. "Select item"
  * - hasTextInput: the step asks for a typed value (the tote scan screen)
+ * - noDatelotItems: the step says the tote has no datelot items
  * - actions: every button's action name (data-click-action), e.g. "Done",
  *   "ViewDatelotItems"
  * - products: datelot items when the step is the item list (only dl's with
@@ -122,8 +123,22 @@ export function parseQtPage(html) {
     .map((el) => normalizeValue(el.textContent))
     .filter(Boolean);
 
+  // "View Datelot Items" on a tote without dated items (seen live:
+  // "No datelot items found in the container."). Hidden status templates
+  // (.aft-tool-hide) are left out of the text.
+  const visibleText = workflow
+    ? normalizeValue(
+        Array.from(workflow.childNodes)
+          .filter((node) => !(node.nodeType === 1 && node.classList.contains('aft-tool-hide')))
+          .map((node) => node.textContent)
+          .join(' ')
+      )
+    : '';
+  const noDatelotItems = /no datelot items/i.test(visibleText);
+
   return {
     found: Boolean(id?.objectId),
+    noDatelotItems,
     objectId: id?.objectId ?? null,
     instructionId: id?.instructionId ?? null,
     status: id?.status ?? null,

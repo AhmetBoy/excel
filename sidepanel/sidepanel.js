@@ -194,8 +194,11 @@ const WARN_STATUSES = new Set([
   'partial_failure',
 ]);
 
+// Normal answers that just mean "nothing to show" (green like ok).
+const OK_STATUSES = new Set(['ok', 'no_datelot_items']);
+
 function badgeClass(status) {
-  if (status === 'ok') return 'ok';
+  if (OK_STATUSES.has(status)) return 'ok';
   if (ERROR_STATUSES.has(status)) return 'error';
   if (WARN_STATUSES.has(status)) return 'warn';
   return 'warn';
@@ -211,18 +214,46 @@ function renderSourceStatus(sourceStatus, sourceMessages = {}) {
     qt: 'QT',
     history: 'Inventory History',
   };
-  sourceStatusEl.replaceChildren(
-    ...Object.entries(sourceStatus).map(([key, status]) => {
-      const badge = document.createElement('span');
-      badge.className = `status-badge ${badgeClass(status)}`;
-      badge.textContent = `${labels[key] ?? key}: ${describeSourceStatus(status)}`;
-      if (sourceMessages[key]) {
-        badge.title = sourceMessages[key];
-        badge.textContent += ' ⓘ';
-      }
-      return badge;
-    })
-  );
+  const badges = Object.entries(sourceStatus).map(([key, status]) => {
+    const badge = document.createElement('span');
+    badge.className = `status-badge ${badgeClass(status)}`;
+    badge.textContent = `${labels[key] ?? key}: ${describeSourceStatus(status)}`;
+    if (sourceMessages[key]) badge.title = sourceMessages[key];
+    return badge;
+  });
+
+  // Why a source failed, written out (not only on hover) so it can be read
+  // and copied; normal answers keep it in the tooltip only.
+  const details = Object.entries(sourceMessages)
+    .filter(([key]) => sourceStatus[key] && !OK_STATUSES.has(sourceStatus[key]))
+    .map(([key, message]) => buildSourceMessage(`${labels[key] ?? key}: ${message}`));
+
+  sourceStatusEl.replaceChildren(...badges, ...details);
+}
+
+function buildSourceMessage(text) {
+  const box = document.createElement('div');
+  box.className = 'source-message';
+  const body = document.createElement('span');
+  body.className = 'source-message-text';
+  body.textContent = text;
+  const copy = document.createElement('button');
+  copy.type = 'button';
+  copy.className = 'source-message-copy';
+  copy.textContent = 'Kopyala';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      copy.textContent = 'Kopyalandı ✔';
+    } catch {
+      copy.textContent = 'Kopyalanamadı';
+    }
+    setTimeout(() => {
+      copy.textContent = 'Kopyala';
+    }, 1500);
+  });
+  box.append(body, copy);
+  return box;
 }
 
 function setLoading(isLoading) {

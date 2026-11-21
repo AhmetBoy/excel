@@ -258,6 +258,33 @@ button:hover {
   margin-bottom: 10px;
 }
 
+/* Failure reason under the badges: selectable, with a copy button. */
+.source-message {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #e08f8f;
+  border-radius: 6px;
+  background: #fff5f5;
+  font-size: 11px;
+}
+
+.source-message-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.source-message-copy {
+  flex: none;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
 .status-badge {
   padding: 3px 8px;
   border-radius: 10px;

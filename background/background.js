@@ -153,6 +153,8 @@ async function resolveQt(toteNumber) {
   }
   const products = response.products ?? [];
   if (products.length > 0) return { products, status: 'ok' };
+  // QT itself said the tote has no datelot items: a normal answer, not a failure.
+  if (response.empty === 'no_items') return { products, status: 'no_datelot_items' };
   return { products, status: 'no_datelot_screen', message: `View Datelot Items butonu yok — ${response.message ?? ''}` };
 }
 
