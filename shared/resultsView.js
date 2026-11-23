@@ -1,6 +1,9 @@
 import { displayOrMissing } from './normalize.js';
 
 export const COLUMNS = [
+  // Image URL comes with the FC Research product lookup that HRV already
+  // makes, so showing it costs no extra request. Hidden by the checkbox.
+  { key: 'image', label: 'Görsel', toggle: 'images', placeFirst: true },
   { key: 'dropZone', label: 'DropZone' },
   { key: 'consumer', label: 'Consumer' },
   { key: 'disposition', label: 'Disposition' },
@@ -24,6 +27,7 @@ const SOURCE_STATUS_LABELS = {
   not_found: 'Veri bulunamadı',
   no_data: 'Veri bulunamadı',
   skipped_no_asin: 'ASIN yok, atlandı',
+  skipped_too_many: "10'dan fazla çeşit, atlandı",
   partial_failure: 'Kısmen başarısız',
   no_datelot_screen: 'Datelot bilgisi gösterilmedi',
   no_datelot_items: 'SKT takipli ürün yok',
@@ -104,8 +108,13 @@ export function describePrep(row) {
  * @param {{key: string, label: string, productOnly?: boolean}[]} columns
  * @param {string} kind - 'container' | 'location' | 'product'
  */
-export function columnsForKind(columns, kind) {
-  return kind === 'product' ? columns : columns.filter((column) => !column.productOnly);
+/**
+ * @param {{ showImages?: boolean }} [options] - false drops the Görsel column
+ */
+export function columnsForKind(columns, kind, { showImages = true } = {}) {
+  return columns.filter(
+    (column) => (kind === 'product' || !column.productOnly) && (showImages || column.toggle !== 'images')
+  );
 }
 
 /** True when any product of the result is High Value. */
@@ -158,9 +167,14 @@ export function reorderColumns(storedKeyOrder) {
   const byKey = new Map(COLUMNS.map((column) => [column.key, column]));
   const ordered = storedKeyOrder.map((key) => byKey.get(key)).filter(Boolean);
   const orderedKeys = new Set(ordered.map((column) => column.key));
+
   const remaining = COLUMNS.filter((column) => !orderedKeys.has(column.key));
 
-  return [...ordered, ...remaining];
+  // Columns missing from the saved order go to the end, except a thumbnail
+  // column (Görsel, added later), which belongs in front.
+  const front = remaining.filter((column) => column.placeFirst);
+  const back = remaining.filter((column) => !column.placeFirst);
+  return [...front, ...ordered, ...back];
 }
 
 const FILTERABLE_FIELDS = ['asin', 'fnSku', 'fcSku', 'owner', 'dropZone', 'binDescription', 'expirationDate'];
@@ -196,6 +210,26 @@ export function filterRows(rows, query) {
  *   optional extra CSS class per cell (e.g. to highlight a value that
  *   triggered a stow-readiness rule)
  */
+function imageCell(row) {
+  if (!row.imageUrl) {
+    const none = document.createElement('span');
+    none.className = 'image-missing';
+    none.textContent = '—';
+    return none;
+  }
+  const img = document.createElement('img');
+  img.src = row.imageUrl;
+  img.alt = row.title ?? row.asin ?? '';
+  img.loading = 'lazy';
+  img.addEventListener('error', () => {
+    const none = document.createElement('span');
+    none.className = 'image-missing';
+    none.textContent = '—';
+    img.replaceWith(none);
+  });
+  return img;
+}
+
 export function renderRows(tbody, rows, columns = COLUMNS, getCellClass = null) {
   tbody.replaceChildren();
 
@@ -214,10 +248,15 @@ export function renderRows(tbody, rows, columns = COLUMNS, getCellClass = null) 
     const tr = document.createElement('tr');
     for (const column of columns) {
       const td = document.createElement('td');
-      const renderCell = CELL_RENDERERS[column.key];
-      td.textContent = renderCell ? renderCell(row) : displayOrMissing(row[column.key]);
+      if (column.key === 'image') {
+        td.appendChild(imageCell(row));
+      } else {
+        const renderCell = CELL_RENDERERS[column.key];
+        td.textContent = renderCell ? renderCell(row) : displayOrMissing(row[column.key]);
+      }
       const cellClass = getCellClass?.(row, column.key);
       if (cellClass) td.className = cellClass;
+      if (column.key === 'image') td.classList.add('cell-image');
       tr.appendChild(td);
     }
     tbody.appendChild(tr);

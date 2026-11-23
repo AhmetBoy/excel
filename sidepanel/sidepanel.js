@@ -29,6 +29,31 @@ const loadingEl = document.getElementById('loading');
 const sourceStatusEl = document.getElementById('source-status');
 const toteVerdictEl = document.getElementById('tote-verdict');
 const filterBarEl = document.getElementById('filter-bar');
+const showImagesInput = document.getElementById('show-images');
+
+// Per-viewer preference only: browser storage may be unavailable.
+const SHOW_IMAGES_KEY = 'showProductImages';
+function readShowImages() {
+  try {
+    return localStorage.getItem(SHOW_IMAGES_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+showImagesInput.checked = readShowImages();
+showImagesInput.addEventListener('change', () => {
+  try {
+    localStorage.setItem(SHOW_IMAGES_KEY, String(showImagesInput.checked));
+  } catch {
+    // keep the choice for this session only
+  }
+  buildTableHead();
+  applyFilterAndRender();
+});
+
+function visibleColumns() {
+  return columnsForKind(currentColumns, lastKind, { showImages: showImagesInput.checked });
+}
 const filterInput = document.getElementById('filter-input');
 const resultsWrapperEl = document.getElementById('results-wrapper');
 const resultsHeadEl = document.getElementById('results-head');
@@ -146,7 +171,7 @@ function moveColumn(draggedKey, targetKey) {
 
 function buildTableHead() {
   const tr = document.createElement('tr');
-  for (const column of columnsForKind(currentColumns, lastKind)) {
+  for (const column of visibleColumns()) {
     const th = document.createElement('th');
     th.textContent = column.label;
     th.draggable = true;
@@ -189,6 +214,7 @@ const WARN_STATUSES = new Set([
   'no_data',
   'not_found',
   'skipped_no_asin',
+  'skipped_too_many',
   'no_datelot_screen',
   'no_qt_tab',
   'partial_failure',
@@ -368,7 +394,7 @@ function applyFilterAndRender() {
     moveNeeded: isMoveNeeded(lastRows),
     columnClass: dropZoneColumnClass(lastRows),
   };
-  const columns = columnsForKind(currentColumns, lastKind);
+  const columns = visibleColumns();
   renderRows(resultsBodyEl, dedupeDropZoneDisplay(filtered), columns, (row, key) =>
     key === 'hrv'
       ? row.highValue === true

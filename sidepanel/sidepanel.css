@@ -440,6 +440,39 @@ td.cell-warn {
   margin-bottom: 8px;
 }
 
+#filter-bar:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+td.cell-image {
+  width: 56px;
+  padding: 2px;
+  text-align: center;
+}
+
+td.cell-image img {
+  display: block;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.image-missing {
+  color: #999;
+}
+
 #results-wrapper {
   overflow-x: auto;
 }
@@ -1711,4 +1744,221 @@ body.locked #login-screen {
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 13px;
+}
+
+/* ---------- Analiz (user activity) ---------- */
+/* Status colors (good / warning / serious / critical) are reserved for the
+   associate's state and always sit next to an icon + label. */
+.ua-table {
+  --ua-good: #0ca30c;
+  --ua-warning: #fab219;
+  --ua-serious: #ec835a;
+  --ua-critical: #d03b3b;
+  --ua-neutral: #b4b3ad;
+}
+
+.ua-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 8px;
+  --ua-good: #0ca30c;
+  --ua-warning: #fab219;
+  --ua-serious: #ec835a;
+  --ua-critical: #d03b3b;
+  --ua-neutral: #b4b3ad;
+}
+
+.ua-tile {
+  flex: 1 1 90px;
+  min-width: 90px;
+  padding: 6px 8px;
+  border: 1px solid #e1e0d9;
+  border-left: 4px solid var(--ua-neutral);
+  border-radius: 6px;
+  background: #fcfcfb;
+}
+
+.ua-tile.ua-active { border-left-color: var(--ua-good); }
+.ua-tile.ua-other { border-left-color: var(--ua-serious); }
+.ua-tile.ua-idle { border-left-color: var(--ua-warning); }
+.ua-tile.ua-away { border-left-color: var(--ua-critical); }
+
+.ua-tile-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0b0b0b;
+  line-height: 1.1;
+}
+
+.ua-tile-label {
+  font-size: 11px;
+  color: #52514e;
+}
+
+.ua-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.ua-insight {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #f3f4f6;
+  color: #0b0b0b;
+}
+
+.ua-insight-warn {
+  background: #fff6e0;
+}
+
+.ua-insight-muted {
+  background: none;
+  color: #6b6a66;
+  padding-left: 0;
+}
+
+.ua-table td {
+  text-align: left;
+  vertical-align: middle;
+}
+
+.ua-table tbody tr:hover {
+  background: #f7f7f5;
+}
+
+.ua-sub {
+  font-size: 10px;
+  color: #6b6a66;
+}
+
+.ua-failed {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.ua-scan-warn {
+  color: #b42318;
+}
+
+.ua-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #0b0b0b;
+}
+
+.ua-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  color: #fff;
+  background: var(--ua-neutral);
+}
+
+.ua-active .ua-state-icon { background: var(--ua-good); }
+.ua-other .ua-state-icon { background: var(--ua-serious); }
+.ua-idle .ua-state-icon { background: var(--ua-warning); color: #0b0b0b; }
+.ua-away .ua-state-icon { background: var(--ua-critical); }
+
+.ua-state-extra {
+  color: #52514e;
+  padding-left: 20px;
+}
+
+.ua-bar-head {
+  min-width: 96px;
+}
+
+.ua-name {
+  font-weight: 600;
+}
+
+.ua-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ua-bar-track {
+  flex: 1;
+  min-width: 44px;
+  height: 8px;
+  border-radius: 4px;
+  background: #efeee9;
+  overflow: hidden;
+}
+
+.ua-bar-fill {
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--ua-neutral);
+}
+
+.ua-bar-fill.ua-active { background: var(--ua-good); }
+.ua-bar-fill.ua-other { background: var(--ua-serious); }
+.ua-bar-fill.ua-idle { background: var(--ua-warning); }
+.ua-bar-fill.ua-away { background: var(--ua-critical); }
+
+.ua-bar-text {
+  font-size: 11px;
+  color: #0b0b0b;
+  min-width: 40px;
+  text-align: right;
+}
+
+.ua-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 4px 0;
+  color: #0b0b0b;
+}
+
+.ua-floor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+}
+
+.ua-floor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.ua-floor-name {
+  width: 44px;
+  color: #52514e;
+}
+
+.ua-floor-track {
+  flex: 1;
+  height: 10px;
+}
+
+.ua-floor-fill {
+  height: 100%;
+  min-width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: #2a78d6;
+}
+
+.ua-floor-count {
+  width: 48px;
+  text-align: right;
+  color: #0b0b0b;
+}
+
+.ua-table th {
+  text-align: left;
 }

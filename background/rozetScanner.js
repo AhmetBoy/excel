@@ -1,11 +1,14 @@
 // Background side of the "Rozet" early warning (see shared/rozetWatch.js):
 // scans every associate of the Rapor user list on a chrome.alarms timer,
 // stores the failed stows it finds, and shows desktop notifications.
+// The same rows also feed the "Kullanıcı Analizi" tab (shared/userActivity.js):
+// each associate's latest activity is stored as a by-product of the scan.
 // Read-only towards FC Research - it only runs the history search.
 
 import { parseUserEntries } from '../shared/stowReportTable.js';
 import { isFeatureAllowed } from '../shared/access.js';
 import { fetchHistoryByDay } from '../shared/historyByDay.js';
+import { ACTIVITY_KEY, mergeActivity, summarizeActivity } from '../shared/userActivity.js';
 import {
   buildNotifications,
   daysSince,
@@ -14,7 +17,6 @@ import {
   extractFailedStows,
   mergeEvents,
   pruneEvents,
-  reachedCutoff,
   recordTimeMs,
   scanCutoffMs,
   setResolved,
@@ -77,6 +79,15 @@ function notify(notes) {
   }
 }
 
+function newestTime(records) {
+  let best = null;
+  for (const record of records) {
+    const ms = recordTimeMs(record);
+    if (ms !== null && (best === null || ms > best.ms)) best = { ms, time: record.time };
+  }
+  return best?.time ?? null;
+}
+
 /** One associate: history since the cutoff, failed stows in it. */
 async function scanUser(deps, login, watermark, now) {
   const cutoff = scanCutoffMs(watermark, now);
@@ -84,14 +95,17 @@ async function scanUser(deps, login, watermark, now) {
     s: login,
     now,
     days: daysSince(cutoff, now),
-    stopAfter: (items) => reachedCutoff(items, cutoff),
+    // Older days only while the rows read so far don't reach back to the cutoff.
+    stopAfter: (items) => items.some((r) => (recordTimeMs(r) ?? Infinity) < cutoff),
   });
   const recent = result.items.filter((r) => (recordTimeMs(r) ?? Infinity) >= cutoff);
   return {
     login,
     status: result.status,
     events: extractFailedStows(recent, login),
-    newest: result.items[0]?.time ?? null,
+    activity: summarizeActivity(result.items, login, now),
+    // Rows aren't newest-first across pages: take the latest time.
+    newest: newestTime(result.items),
   };
 }
 
@@ -165,13 +179,31 @@ async function doScan(deps, trigger) {
     },
   });
 
+  await storeActivity(results, now);
+
+  // A scan started for the analysis tab must not notify a profile without Rozet.
   const settings = await readSettings();
-  if (settings.notify && added.length > 0) {
+  if (settings.notify && added.length > 0 && (await isFeatureAllowed('rozet'))) {
     const all = await readLocal(EVENTS_KEY, []);
     notify(buildNotifications(added, all, entries));
   }
 
   return { status, added: added.length, users: results.length, failedUsers };
+}
+
+// Newest known activity per login, kept across scans (see mergeActivity).
+async function storeActivity(results, now) {
+  const stored = await readLocal(ACTIVITY_KEY, { users: {} });
+  const users = { ...(stored.users ?? {}) };
+  for (const r of results) {
+    if (r.activity) users[r.login] = mergeActivity(users[r.login], r.activity);
+  }
+  await chrome.storage.local.set({ [ACTIVITY_KEY]: { updatedAt: now.toISOString(), users } });
+}
+
+/** Rozet or the analysis tab: either one keeps the scan running. */
+async function scanAllowed() {
+  return (await isFeatureAllowed('rozet')) || (await isFeatureAllowed('userAnalysis'));
 }
 
 async function syncAlarm() {
@@ -218,8 +250,8 @@ const MESSAGE_HANDLERS = {
 export function startRozetWatch(deps) {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== ALARM_NAME) return;
-    // Scans only while a profile with the Rozet feature is logged in.
-    isFeatureAllowed('rozet')
+    // Scans only while a profile with Rozet or Kullanıcı Analizi is logged in.
+    scanAllowed()
       .then((allowed) => allowed && runScan(deps, 'auto'))
       .catch((e) => console.error('[rozet]', e));
   });
@@ -238,6 +270,18 @@ export function startRozetWatch(deps) {
     } catch (error) {
       console.warn('[rozet] side panel could not be opened:', error);
     }
+  });
+
+  // "Şimdi Tara" of the analysis tab: the same scan, its own permission.
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type !== 'ACTIVITY_SCAN_NOW') return undefined;
+    isFeatureAllowed('userAnalysis')
+      .then((allowed) =>
+        allowed ? runScan(deps, 'manual') : { status: 'error', message: 'Bu özellik giriş yapılan profilde kapalı.' }
+      )
+      .then(sendResponse)
+      .catch((error) => sendResponse({ status: 'error', message: String(error?.message ?? error) }));
+    return true;
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

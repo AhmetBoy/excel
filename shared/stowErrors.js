@@ -1,3 +1,5 @@
+import { isStowTool } from './stowTool.js';
+
 // How far back the Inventory History is requested. Two calendar days
 // (yesterday + today) covers a night shift that crosses midnight, while
 // totes are reused often enough that older stow rounds are unrelated.
@@ -52,10 +54,11 @@ export function systemQuantityInBin(binRecords, { fnSku, asin }) {
 /**
  * A move out of the container into a bin. Owner PROBLEM_SOLVE on both
  * sides means the unit was physically put in the bin but the stow failed;
- * owner "inventory" means a successful stow.
+ * owner "inventory" means a successful stow. Only the stow app's rows
+ * count (stowTool.js); e.g. a MoveItemsApp move is not a stow.
  */
 function stowMove(record, container) {
-  if (upper(record.op) !== 'M' || !record.newBin) return null;
+  if (upper(record.op) !== 'M' || !record.newBin || !isStowTool(record)) return null;
   if (container && upper(record.oldBin) !== upper(container)) return null;
   const failed = upper(record.oldOwner) === PROBLEM_SOLVE && upper(record.newOwner) === PROBLEM_SOLVE;
   if (failed) return 'failed';

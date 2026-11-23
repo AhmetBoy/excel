@@ -16,6 +16,7 @@ export const FEATURES = [
   { id: 'barcode', label: 'Barkod' },
   { id: 'stowmap', label: 'StowMap' },
   { id: 'rozet', label: 'Rozet (hatalı stow takibi)' },
+  { id: 'userAnalysis', label: 'Kullanıcı Analizi (son işlemler)' },
 ];
 export const ALL_FEATURES = FEATURES.map((f) => f.id);
 export const DEFAULT_TEMEL_FEATURES = ['barcode'];

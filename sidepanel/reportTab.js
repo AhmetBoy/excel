@@ -25,6 +25,7 @@ const tabPanels = {
   barcode: document.getElementById('tab-barcode'),
   stowmap: document.getElementById('tab-stowmap'),
   rozet: document.getElementById('tab-rozet'),
+  userAnalysis: document.getElementById('tab-userAnalysis'),
   admin: document.getElementById('tab-admin'),
 };
 

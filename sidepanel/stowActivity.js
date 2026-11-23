@@ -9,6 +9,7 @@ import {
   formatAgo,
   formatDuration,
   GAP_OPTIONS,
+  preferredProductId,
 } from '../shared/stowActivity.js';
 
 const GAP_STORAGE_KEY = 'stowGapMinutes';
@@ -67,6 +68,12 @@ export function productImage(stow, size) {
   return media;
 }
 
+/** "LPN: LPNUIN13…" / "X ASIN: X002…" / "ASIN: B0…" (see preferredProductId). */
+function productLabel(stow) {
+  const product = preferredProductId(stow);
+  return product ? `${product.kind}: ${product.id}` : '—';
+}
+
 function stowWhen(stow, nowMs) {
   return `${formatLocalDateTime(new Date(stow.timeMs))} · ${formatAgo(stow.timeMs, nowMs)}`;
 }
@@ -84,7 +91,7 @@ function lastStowCard(stow, nowMs) {
     head,
     el('div', 'product-meta', `Saat: ${formatLocalDateTime(new Date(stow.timeMs))}`),
     el('div', 'last-stow-bin', `Adres: ${stow.bin}`),
-    el('div', 'product-meta', `Ürün: ${stow.asin ?? stow.fnSku ?? '—'} · ${stow.quantity} adet`),
+    el('div', 'product-meta', `${productLabel(stow)} · ${stow.quantity} adet`),
     el('div', 'product-title', stow.title ?? ''),
     el('div', 'product-meta', `Tote: ${stow.tote ?? '—'}`)
   );
@@ -101,7 +108,7 @@ function recentList(stows, nowMs) {
     const text = el('div');
     text.append(
       el('strong', null, stow.bin),
-      el('span', null, ` · ${stow.asin ?? stow.fnSku ?? '—'}`),
+      el('span', null, ` · ${productLabel(stow)}`),
       el('div', 'product-meta', stowWhen(stow, nowMs))
     );
     if (stow.failed) text.append(el('span', 'badge-failed', 'Hatalı'));

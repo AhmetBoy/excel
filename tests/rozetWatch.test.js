@@ -9,7 +9,6 @@ import {
   groupEvents,
   mergeEvents,
   pruneEvents,
-  reachedCutoff,
   RETENTION_MS,
   scanCutoffMs,
   SCAN_OVERLAP_MS,
@@ -118,14 +117,6 @@ describe('scan window', () => {
     const now = new Date(2026, 10, 3, 2, 0);
     expect(daysSince(new Date(2026, 10, 2, 23, 0).getTime(), now)).toBe(2);
     expect(daysSince(new Date(2026, 10, 3, 1, 0).getTime(), now)).toBe(1);
-  });
-
-  it('stops paging once a page reaches past the cutoff', () => {
-    const oldest = Date.parse(records.at(-1).time);
-    expect(reachedCutoff(records, oldest + 1)).toBe(true);
-    expect(reachedCutoff(records, oldest)).toBe(false);
-    // oldest-first pages: newer rows are still ahead, keep paging
-    expect(reachedCutoff([...records].reverse(), Date.now() + 86_400_000)).toBe(false);
   });
 });
 

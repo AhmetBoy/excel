@@ -1,4 +1,5 @@
 import { formatLocalDateTime, shiftOf } from './shifts.js';
+import { isStowTool } from './stowTool.js';
 
 // A bin can hold a product for a long time, so its history is read further
 // back than a tote's (see HISTORY_DAYS in stowErrors.js).
@@ -27,6 +28,7 @@ export function stowsIntoLocation(records, location) {
 
   for (const record of records ?? []) {
     if (upper(record.op) !== 'M' || upper(record.newBin) !== target) continue;
+    if (!isStowTool(record)) continue; // e.g. a MoveItemsApp move, not a stow
     if (upper(record.oldBin) === target) continue; // in-bin owner change, not a stow
 
     const failed = upper(record.oldOwner) === PROBLEM_SOLVE && upper(record.newOwner) === PROBLEM_SOLVE;

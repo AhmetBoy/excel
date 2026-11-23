@@ -3,6 +3,7 @@
 // Inventory History searched by login (newest row first).
 
 import { recordTimeMs } from './rozetWatch.js';
+import { isStowTool } from './stowTool.js';
 
 export const GAP_OPTIONS = [10, 20, 30];
 export const DEFAULT_GAP_MINUTES = 10;
@@ -20,12 +21,14 @@ function upper(value) {
 }
 
 /**
- * A stow is an "M" move of a product from a container into a bin. Failed
+ * A stow is an "M" move of a product from a container into a bin, written
+ * by the stow app (Tool FCStowAppWebsite - see stowTool.js). Failed
  * stows (PROBLEM_SOLVE on both sides) still count: the associate was
  * stowing at that moment.
  */
 function isStow(record, who) {
   if (upper(record.op) !== 'M') return false;
+  if (!isStowTool(record)) return false;
   if (!record.newBin || CONTAINER_PREFIX.test(record.newBin)) return false;
   if (upper(record.newBin) === upper(record.oldBin)) return false;
   if (!record.asin && !record.fnSku) return false;
@@ -34,12 +37,30 @@ function isStow(record, who) {
 }
 
 /**
+ * The id a person scans for the unit, in the order the user asked for:
+ * LPN first, then the X ASIN (an FNSku starting "X0"), then the B ASIN.
+ * History rows often repeat the ASIN in the FNSku column; that is not an
+ * X ASIN.
+ *
+ * @param {{ lpn?: string|null, fnSku?: string|null, asin?: string|null }} item
+ * @returns {{ id: string, kind: 'LPN'|'X ASIN'|'ASIN' } | null}
+ */
+export function preferredProductId({ lpn, fnSku, asin } = {}) {
+  const value = (v) => (v ?? '').trim();
+  if (value(lpn)) return { id: value(lpn), kind: 'LPN' };
+  if (/^X0/i.test(value(fnSku))) return { id: value(fnSku).toUpperCase(), kind: 'X ASIN' };
+  if (value(asin)) return { id: value(asin).toUpperCase(), kind: 'ASIN' };
+  if (value(fnSku)) return { id: value(fnSku).toUpperCase(), kind: 'ASIN' };
+  return null;
+}
+
+/**
  * Stows of `login`, newest first.
  *
  * @param {object[]} records - from parseInventoryHistoryHtml().records
  * @param {string} login
  * @returns {Array<{ time: string, timeMs: number, tote: string|null, bin: string,
- *   asin: string|null, fnSku: string|null, quantity: number, failed: boolean }>}
+ *   asin: string|null, fnSku: string|null, lpn: string|null, quantity: number, failed: boolean }>}
  */
 export function extractStows(records, login) {
   const who = (login ?? '').toLowerCase();
@@ -55,6 +76,7 @@ export function extractStows(records, login) {
       bin: record.newBin,
       asin: record.asin,
       fnSku: record.fnSku,
+      lpn: record.lpn ?? null,
       quantity: record.quantity ?? 1,
       failed: upper(record.oldOwner) === PROBLEM_SOLVE && upper(record.newOwner) === PROBLEM_SOLVE,
     });

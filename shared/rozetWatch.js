@@ -8,6 +8,7 @@
 // point of this module is to surface those too.
 
 import { shiftOf } from './shifts.js';
+import { isStowTool } from './stowTool.js';
 
 export const ROZET_LIMIT = 5;
 export const RETENTION_MS = 2 * 24 * 60 * 60 * 1000;
@@ -41,6 +42,7 @@ export function recordTimeMs(record) {
 function isFailedStow(record) {
   return (
     upper(record.op) === 'M' &&
+    isStowTool(record) &&
     Boolean(record.newBin) &&
     Boolean(record.oldBin) &&
     upper(record.oldOwner) === PROBLEM_SOLVE &&
@@ -124,18 +126,8 @@ export function daysSince(cutoffMs, now = new Date()) {
   return Math.round((to - from) / 86_400_000) + 1;
 }
 
-/**
- * True when paging can stop: the rows are newest-first and the last one
- * read is already older than the cutoff. If the rows come oldest-first
- * (seen as first row older than last), newer rows are still ahead, so
- * paging never stops early.
- */
-export function reachedCutoff(records, cutoffMs) {
-  const times = records.map(recordTimeMs).filter((ms) => ms !== null);
-  if (times.length === 0) return false;
-  if (times[0] < times.at(-1)) return false;
-  return times.at(-1) < cutoffMs;
-}
+// No "stop paging past the cutoff" helper: FC Research pages run forward
+// in time, so a day is always read to its end (see shared/historyByDay.js).
 
 export function groupKeyOf(event) {
   return `${event.login}|${upper(event.tote)}|${upper(event.fnSku) || upper(event.asin)}`;

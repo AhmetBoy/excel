@@ -41,6 +41,13 @@ describe('describePrep', () => {
 describe('columnsForKind', () => {
   const keys = (kind) => columnsForKind(COLUMNS, kind).map((c) => c.key);
 
+  it('drops the Görsel column when images are switched off', () => {
+    expect(keys('container')[0]).toBe('image');
+    const off = columnsForKind(COLUMNS, 'container', { showImages: false }).map((c) => c.key);
+    expect(off).not.toContain('image');
+    expect(off[0]).toBe('dropZone');
+  });
+
   it('shows the Prep column for a product scan only', () => {
     expect(keys('product')).toContain('prep');
     expect(keys('container')).not.toContain('prep');
@@ -115,8 +122,8 @@ describe('dedupeDropZoneDisplay', () => {
 });
 
 describe('COLUMNS default order', () => {
-  it('leads with DropZone, Consumer, Disposition as requested', () => {
-    expect(COLUMNS.slice(0, 3).map((c) => c.key)).toEqual(['dropZone', 'consumer', 'disposition']);
+  it('leads with the image, then DropZone, Consumer, Disposition as requested', () => {
+    expect(COLUMNS.slice(0, 4).map((c) => c.key)).toEqual(['image', 'dropZone', 'consumer', 'disposition']);
   });
 });
 
@@ -128,23 +135,26 @@ describe('reorderColumns', () => {
   });
 
   it('applies a stored key order', () => {
-    const result = reorderColumns(['asin', 'dropZone']);
-    expect(result[0].key).toBe('asin');
-    expect(result[1].key).toBe('dropZone');
+    const result = reorderColumns(['image', 'asin', 'dropZone']);
+    expect(result.slice(0, 3).map((c) => c.key)).toEqual(['image', 'asin', 'dropZone']);
   });
 
-  it('appends columns missing from the stored order at the end, in default order', () => {
-    const result = reorderColumns(['title']);
-    expect(result[0].key).toBe('title');
-    // everything else keeps its relative default order after the one pinned column
-    const remainingKeys = result.slice(1).map((c) => c.key);
-    const defaultRemainingKeys = COLUMNS.filter((c) => c.key !== 'title').map((c) => c.key);
-    expect(remainingKeys).toEqual(defaultRemainingKeys);
+  it('keeps the image column where the user dragged it', () => {
+    const result = reorderColumns(['asin', 'image']);
+    expect(result.slice(0, 2).map((c) => c.key)).toEqual(['asin', 'image']);
+  });
+
+  it('puts the image column first when the saved order predates it, others at the end', () => {
+    // An order saved before the Görsel column existed.
+    const saved = COLUMNS.filter((c) => c.key !== 'image').map((c) => c.key).reverse();
+    const result = reorderColumns(saved);
+    expect(result[0].key).toBe('image');
+    expect(result.slice(1).map((c) => c.key)).toEqual(saved);
   });
 
   it('ignores stored keys that no longer exist in COLUMNS', () => {
-    const result = reorderColumns(['no_longer_exists', 'asin']);
-    expect(result[0].key).toBe('asin');
+    const result = reorderColumns(['no_longer_exists', 'image', 'asin']);
+    expect(result[1].key).toBe('asin');
     expect(result.some((c) => c.key === 'no_longer_exists')).toBe(false);
     expect(result).toHaveLength(COLUMNS.length);
   });

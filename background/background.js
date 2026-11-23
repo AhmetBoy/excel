@@ -14,7 +14,6 @@ import { analyzeStowErrors, buildHistoryDateFields } from '../shared/stowErrors.
 import { LOCATION_HISTORY_DAYS } from '../shared/locationStows.js';
 import { startRozetWatch } from './rozetScanner.js';
 import { extractStows, RECENT_STOW_COUNT, USER_STOW_HISTORY_DAYS } from '../shared/stowActivity.js';
-import { reachedCutoff } from '../shared/rozetWatch.js';
 import { fetchHistoryByDay } from '../shared/historyByDay.js';
 import { shiftOf } from '../shared/shifts.js';
 import { isFeatureAllowed } from '../shared/access.js';
@@ -118,6 +117,9 @@ async function resolvePandash(asins) {
 }
 
 const MAX_PARALLEL_SIDELINE_REQUESTS = 4;
+// Sideline is asked once per ASIN and is slow; a tote with more distinct
+// products than this skips it so the lookup doesn't hang (user's rule).
+const MAX_SIDELINE_VARIETY = 10;
 
 /**
  * Sideline binDescription per ASIN. Sideline takes one item per request,
@@ -127,6 +129,7 @@ const MAX_PARALLEL_SIDELINE_REQUESTS = 4;
  */
 async function resolveSideline(toteNumber, asins) {
   if (asins.length === 0) return { matches: [], status: 'skipped_no_asin' };
+  if (asins.length > MAX_SIDELINE_VARIETY) return { matches: [], status: 'skipped_too_many' };
 
   const matches = await mapWithConcurrency(asins, MAX_PARALLEL_SIDELINE_REQUESTS, async (asin) => {
     const response = await fetchSidelineItem(toteNumber, asin);
@@ -311,7 +314,7 @@ const MAX_PARALLEL_CONTAINER_LOOKUPS = 4;
  *
  * @returns {Promise<{ status: string, first?: object, items: object[] }>}
  */
-async function fetchPagedSection(section, fields, parseType, listKey, { stopAfter } = {}) {
+async function fetchPagedSection(section, fields, parseType, listKey, { stopAfter, maxPages = MAX_SECTION_PAGES } = {}) {
   const response = await fetchFcResearchSection(section, fields);
   if (response.status !== 'ok') return { status: response.status, items: [] };
 
@@ -323,7 +326,7 @@ async function fetchPagedSection(section, fields, parseType, listKey, { stopAfte
   let partial = false;
   for (
     let page = 0;
-    hasMorePages(token) && page < MAX_SECTION_PAGES && !stopAfter?.(items);
+    hasMorePages(token) && page < maxPages && !stopAfter?.(items);
     page++
   ) {
     const more = await fetchFcResearchSectionMore(section, token);
@@ -336,6 +339,12 @@ async function fetchPagedSection(section, fields, parseType, listKey, { stopAfte
     token = parsed.paginationToken;
   }
 
+  // Hitting the page cap leaves rows unread - for FC Research history the
+  // newest ones (see shared/historyByDay.js) - so it isn't a clean "ok".
+  if (hasMorePages(token) && !stopAfter?.(items)) {
+    console.warn(`[tote-lookup] ${section}: stopped at the ${maxPages}-page cap, rows left unread`);
+    partial = true;
+  }
   const status = partial ? 'partial_failure' : items.length > 0 ? 'ok' : 'no_data';
   return { status, first, items };
 }
@@ -382,7 +391,8 @@ async function resolveUserStows(login, productCache) {
     s: login,
     now,
     days: USER_STOW_HISTORY_DAYS,
-    stopAfter: (items) => reachedCutoff(items, shiftStartMs) && extractStows(items, login).length > 0,
+    // After today's full history: go back a day only if today had no stow.
+    stopAfter: (items) => extractStows(items, login).length > 0,
   });
 
   const stows = extractStows(result.items, login);

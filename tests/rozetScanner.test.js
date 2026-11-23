@@ -85,11 +85,30 @@ describe('rozetScanner', () => {
       expect(mock.api.notifications.create).toHaveBeenCalledTimes(1);
       expect(mock.store.rozetScanState.watermarks.stowerx).toBe(page.records[0].time);
       expect(mock.api.action.setBadgeText).toHaveBeenLastCalledWith({ text: '1' });
+      // The same rows feed the Analiz tab: latest activity per login.
+      const activity = mock.store.userActivity.users.stowerx;
+      expect(activity.lastAny.time).toBe(page.records[0].time);
+      expect(activity.lastStow.tool).toBe('FCStowAppWebsite');
 
       // Same rows again: nothing new, no second notification.
       const second = await sendMessage(mock, { type: 'ROZET_SCAN_NOW' });
       expect(second.added).toBe(0);
       expect(mock.api.notifications.create).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('takes the latest row as the watermark even when it is not the first row', async () => {
+    // FC Research pages run forward in time; only each page is newest-first.
+    const half = Math.floor(page.records.length / 2);
+    const later = page.records.slice(0, half);
+    const earlier = page.records.slice(half);
+    fetchPagedSection.mockImplementation(async () => ({ status: 'ok', items: [...earlier, ...later] }));
+    vi.useFakeTimers({ now: new Date('2026-10-31T01:00:00.000Z'), toFake: ['Date'] });
+    try {
+      await sendMessage(mock, { type: 'ROZET_SCAN_NOW' });
+      expect(mock.store.rozetScanState.watermarks.stowerx).toBe(page.records[0].time);
     } finally {
       vi.useRealTimers();
     }

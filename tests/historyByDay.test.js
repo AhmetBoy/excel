@@ -36,6 +36,17 @@ describe('fetchHistoryByDay', () => {
     expect(result).toEqual({ status: 'ok', items: [pages['11/11/2026'].items[0], pages['11/10/2026'].items[0]] });
   });
 
+  it('reads every page of a day even when stopAfter is already met', async () => {
+    // FC Research pages run forward in time: the newest rows are on the last page.
+    const calls = [];
+    const fetcher = async (section, fields, parseType, listKey, options) => {
+      calls.push(options);
+      return { status: 'ok', items: [{ time: '2026-11-11T05:00:00.000Z' }] };
+    };
+    await fetchHistoryByDay(fetcher, { s: 'login', now, days: 2, stopAfter: () => true });
+    expect(calls).toEqual([{ maxPages: 40 }]); // no per-page stop handed to the pager
+  });
+
   it('skips older days once stopAfter is satisfied', async () => {
     const calls = [];
     await fetchHistoryByDay(fake(calls), { s: 'login', now, days: 2, stopAfter: (items) => items.length > 0 });

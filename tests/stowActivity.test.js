@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseInventoryHistoryHtml } from '../shared/parsers/inventoryHistoryParser.js';
-import { extractStows, findIdleGaps, formatAgo, formatDuration } from '../shared/stowActivity.js';
+import { extractStows, findIdleGaps, formatAgo, formatDuration, preferredProductId } from '../shared/stowActivity.js';
 
 // Live Inventory History searched by login (stowerx, anonymized):
 // 198 successful stows + one failed stow (A row + M row).
@@ -79,5 +79,16 @@ describe('formatting', () => {
     expect(formatDuration(120)).toBe('2 sa');
     expect(formatAgo(0, 30_000)).toBe('az önce');
     expect(formatAgo(0, 12 * MIN + 5_000)).toBe('12 dk önce');
+  });
+});
+
+describe('preferredProductId', () => {
+  it('prefers LPN, then X ASIN, then B ASIN', () => {
+    expect(preferredProductId({ lpn: 'LPNUIN1', fnSku: 'X002AB', asin: 'B0C1' })).toEqual({ id: 'LPNUIN1', kind: 'LPN' });
+    expect(preferredProductId({ lpn: null, fnSku: 'x002ab', asin: 'B0C1' })).toEqual({ id: 'X002AB', kind: 'X ASIN' });
+    // History repeats the B ASIN in the FNSku column: not an X ASIN.
+    expect(preferredProductId({ lpn: '', fnSku: 'B0C1', asin: 'B0C1' })).toEqual({ id: 'B0C1', kind: 'ASIN' });
+    expect(preferredProductId({ fnSku: 'B0C1' })).toEqual({ id: 'B0C1', kind: 'ASIN' });
+    expect(preferredProductId({})).toBeNull();
   });
 });

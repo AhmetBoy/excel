@@ -33,6 +33,7 @@
     <button class="tab" type="button" role="tab" data-tab="barcode">Barkod</button>
     <button class="tab" type="button" role="tab" data-tab="stowmap">StowMap</button>
     <button class="tab" type="button" role="tab" data-tab="rozet">Rozet <span id="rozet-tab-count" class="tab-count" hidden></span></button>
+    <button class="tab" type="button" role="tab" data-tab="userAnalysis">Analiz</button>
     <button class="tab" type="button" role="tab" data-tab="admin">Yönetim</button>
   </nav>
 
@@ -76,6 +77,7 @@
         type="text"
         placeholder="ASIN, SKU, Owner, DropZone, Bin Description veya Expiration Date'e göre filtrele"
       />
+      <label class="filter-toggle"><input id="show-images" type="checkbox" checked /> Görselleri göster</label>
     </section>
 
     <section id="user-results" aria-live="polite" hidden></section>
@@ -273,6 +275,49 @@
     <div id="rozet-list"></div>
   </section>
 
+  <section id="tab-userAnalysis" class="tab-panel" hidden>
+    <div class="rozet-controls">
+      <label class="checkbox-label">İşlem
+        <select id="ua-type"></select>
+      </label>
+      <label class="checkbox-label">Devam sayılır:
+        <select id="ua-threshold"></select> dk
+      </label>
+      <label class="checkbox-label">Sırala
+        <select id="ua-sort">
+          <option value="minutes">En uzun bekleyen</option>
+          <option value="recent">En son işlem</option>
+          <option value="name">İsim</option>
+        </select>
+      </label>
+      <button id="ua-scan-button" type="button">Şimdi Tara</button>
+    </div>
+    <p id="ua-scan-status" class="rozet-hint" aria-live="polite"></p>
+
+    <div id="ua-tiles" class="ua-tiles"></div>
+    <div id="ua-insights" class="ua-insights"></div>
+
+    <div class="rozet-table-wrapper">
+      <table id="ua-table" class="rozet-table ua-table">
+        <thead>
+          <tr>
+            <th>İsim</th>
+            <th>Durum</th>
+            <th class="ua-bar-head">Son işlemden beri</th>
+            <th>Lokasyon</th>
+            <th>Saat</th>
+            <th>İşlem</th>
+            <th>Ürün</th>
+            <th title="Bu vardiyada stow edilen adet">Vardiya stow</th>
+          </tr>
+        </thead>
+        <tbody id="ua-body"></tbody>
+      </table>
+    </div>
+
+    <div id="ua-floors" class="ua-floors"></div>
+  </section>
+
   <section id="tab-admin" class="tab-panel" hidden>
     <p id="admin-default-warning" class="admin-warning" hidden></p>
 
@@ -306,6 +351,7 @@
   <script type="module" src="barcodeTab.js"></script>
   <script type="module" src="stowMapTab.js"></script>
   <script type="module" src="rozetTab.js"></script>
+  <script type="module" src="userAnalysisTab.js"></script>
   <script type="module" src="accessUi.js"></script>
 </body>
 </html>
