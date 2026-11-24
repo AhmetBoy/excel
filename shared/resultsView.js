@@ -27,7 +27,6 @@ const SOURCE_STATUS_LABELS = {
   not_found: 'Veri bulunamadı',
   no_data: 'Veri bulunamadı',
   skipped_no_asin: 'ASIN yok, atlandı',
-  skipped_too_many: "10'dan fazla çeşit, atlandı",
   partial_failure: 'Kısmen başarısız',
   no_datelot_screen: 'Datelot bilgisi gösterilmedi',
   no_datelot_items: 'SKT takipli ürün yok',

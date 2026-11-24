@@ -14,6 +14,7 @@ describe('parseProductHtml', () => {
       highValue: true,
       imageUrl: 'https://m.media-amazon.com/images/I/abc.jpg',
       title: 'Kulaklık',
+      expirationDate: null,
     });
   });
 
@@ -40,6 +41,15 @@ describe('parseProductHtml on a live FC Research product section', () => {
       imageUrl: 'https://m.media-amazon.com/images/I/41S-Dc88gwL._SCLZZZZZZZ__.jpg',
     });
     expect(parsed.title).toMatch(/^Razer Blackshark/);
+  });
+
+  it('reads an empty Expiration Date as null', () => {
+    expect(parseProductHtml(html).expirationDate).toBeNull();
+  });
+
+  it('reads a filled Expiration Date (FCSku search)', () => {
+    const dated = html.replace('<td class="timestamp"></td>', '<td class="timestamp">2027-03-15 00:00:00</td>');
+    expect(parseProductHtml(dated).expirationDate).toBe('2027-03-15 00:00:00');
   });
 
   it('reads Very High Value=true', () => {

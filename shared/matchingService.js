@@ -1,3 +1,5 @@
+import { formatExpirationDate } from './expiration.js';
+
 function normalizeForCompare(str) {
   return (str ?? '').trim().toLowerCase();
 }
@@ -72,7 +74,8 @@ export function buildResultRows({
   const inventoryRows = inventoryRecords.map((inv) => {
     const pandash = findMatchByAsin(pandashMatches, inv.asin);
     const sideline = findMatchByAsin(sidelineMatches, inv.asin);
-    const product = findMatchByAsin(productMatches, inv.asin);
+    // Asked by FCSku when the row has one, else by ASIN.
+    const product = findMatchByAsin(productMatches, inv.fcSku) ?? findMatchByAsin(productMatches, inv.asin);
     const prep = findMatchByAsin(prepMatches, inv.asin);
 
     let qtMatchStatus = 'no_fcsku';
@@ -112,7 +115,9 @@ export function buildResultRows({
       imageUrl: product?.imageUrl ?? null,
       prep: prep?.prep ?? null,
       owner: qtProduct?.owner ?? null,
-      expirationDate: qtProduct?.expirationDate ?? null,
+      expirationDate: qtProduct?.expirationDate ?? formatExpirationDate(product?.expirationDate ?? null),
+      // Where expirationDate came from: 'qt', 'fcresearch' or null.
+      expirationSource: qtProduct ? 'qt' : product?.expirationDate ? 'fcresearch' : null,
       qtMatchStatus,
     };
   });
@@ -137,6 +142,7 @@ export function buildResultRows({
       prep: null,
       owner: p.owner,
       expirationDate: p.expirationDate,
+      expirationSource: 'qt',
       qtMatchStatus: 'qt_only_unmatched',
     }));
 

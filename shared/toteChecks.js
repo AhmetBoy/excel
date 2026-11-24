@@ -125,6 +125,27 @@ function hasQtRecord(row) {
   return row.qtMatchStatus === 'matched' || row.qtMatchStatus === 'qt_only_unmatched';
 }
 
+// Rows dated by FC Research (product section asked by FCSku) instead of QT.
+// An empty date there may just mean "not a dated product", so these rows
+// never give "SKT girilmeli" - only a date that is there is checked.
+function hasFcResearchDate(row) {
+  return !hasQtRecord(row) && row.expirationSource === 'fcresearch';
+}
+
+// SKT classes of one row that need an action: QT rows can be 'missing',
+// FC Research rows only 'expired' / 'near'.
+function sktClassOf(row, now) {
+  const cls = classifyExpiration(row.expirationDate, now);
+  if (hasFcResearchDate(row) && cls === 'missing') return null;
+  return cls;
+}
+
+// The rows whose SKT was read, for this QT status.
+function datedRows(rows, qtStatus) {
+  const qtKnown = QT_KNOWN_STATUSES.has(qtStatus);
+  return rows.filter((row) => (qtKnown && hasQtRecord(row)) || hasFcResearchDate(row));
+}
+
 // SKT classes that explain an EXPIRED disposition / PENDING_RESEARCH consumer.
 const SKT_PROBLEM_CLASSES = new Set(['missing', 'expired', 'near']);
 
@@ -135,25 +156,22 @@ const SKT_PROBLEM_CLASSES = new Set(['missing', 'expired', 'near']);
  * whose SKT is unknown (QT failed, no QT record) or fine keep them.
  */
 function rowsExplainedBySkt(rows, qtStatus, now) {
-  if (!QT_KNOWN_STATUSES.has(qtStatus)) return new Set();
-  return new Set(
-    rows.filter((row) => hasQtRecord(row) && SKT_PROBLEM_CLASSES.has(classifyExpiration(row.expirationDate, now)))
-  );
+  return new Set(datedRows(rows, qtStatus).filter((row) => SKT_PROBLEM_CLASSES.has(sktClassOf(row, now))));
 }
 
 function expirationFindings(rows, qtStatus, now) {
-  if (qtStatus === undefined) return []; // QT not asked for this lookup
-  if (!QT_KNOWN_STATUSES.has(qtStatus)) {
-    return [{ level: 'warn', message: 'QT verisi alınamadı, SKT kontrol edilemedi' }];
+  const findings = [];
+  // QT not asked (undefined) is fine; QT asked but failed is reported.
+  if (qtStatus !== undefined && !QT_KNOWN_STATUSES.has(qtStatus)) {
+    findings.push({ level: 'warn', message: 'QT verisi alınamadı, SKT kontrol edilemedi' });
   }
 
   const byClass = { missing: [], expired: [], near: [], unreadable: [] };
-  for (const row of rows.filter(hasQtRecord)) {
-    const cls = classifyExpiration(row.expirationDate, now);
+  for (const row of datedRows(rows, qtStatus)) {
+    const cls = sktClassOf(row, now);
     if (cls in byClass) byClass[cls].push(row);
   }
 
-  const findings = [];
   if (byClass.missing.length > 0) {
     findings.push({
       level: 'action',
@@ -311,8 +329,8 @@ export function evaluateTote(rows, { pandashOk = true, qtStatus, now = new Date(
  */
 export function cellHighlightClass(row, columnKey, { moveNeeded, columnClass = null, now = new Date() }) {
   if (columnKey === 'expirationDate') {
-    if (!hasQtRecord(row)) return null;
-    const cls = classifyExpiration(row.expirationDate, now);
+    if (!hasQtRecord(row) && !hasFcResearchDate(row)) return null;
+    const cls = sktClassOf(row, now);
     if (cls === 'missing' || cls === 'expired' || cls === 'near') return 'cell-action';
     return cls === 'unreadable' ? 'cell-warn' : null;
   }

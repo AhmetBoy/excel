@@ -135,3 +135,23 @@ describe('buildResultRows', () => {
     expect(rows.map((r) => r.asin)).toEqual(['B0A', 'B0B']);
   });
 });
+
+describe('buildResultRows FC Research product by FCSku', () => {
+  it('matches the product by FCSku and takes its Expiration Date', () => {
+    const { rows } = buildResultRows({
+      inventoryRecords: [{ asin: 'B0A', fcSku: 'X00FCA', title: 't', quantity: '1' }],
+      productMatches: [{ asin: 'X00FCA', highValue: true, imageUrl: 'img', expirationDate: '2029-04-16T21:00:00.000Z', status: 'ok' }],
+    });
+    // Midnight Apr 17 in Istanbul, written the way QT shows dates.
+    expect(rows[0]).toMatchObject({ highValue: true, imageUrl: 'img', expirationDate: 'Apr 17 2029', expirationSource: 'fcresearch' });
+  });
+
+  it('prefers the QT date over FC Research', () => {
+    const { rows } = buildResultRows({
+      inventoryRecords: [{ asin: 'B0A', fcSku: 'X00FCA', title: 't', quantity: '1' }],
+      productMatches: [{ asin: 'X00FCA', highValue: false, imageUrl: null, expirationDate: '2027-03-15', status: 'ok' }],
+      qtProducts: [{ fcSku: 'X00FCA', title: 't', quantity: '1', expirationDate: 'Apr 10 2029' }],
+    });
+    expect(rows[0]).toMatchObject({ expirationDate: 'Apr 10 2029', expirationSource: 'qt' });
+  });
+});

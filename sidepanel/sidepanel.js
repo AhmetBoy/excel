@@ -70,6 +70,29 @@ const lastToteKindEl = document.getElementById('last-tote-kind');
 
 const COLUMN_ORDER_STORAGE_KEY = 'toteLookupColumnOrder';
 const AUTO_COPY_STORAGE_KEY = 'toteLookupAutoCopy';
+// Optional slow sources, asked only when their box is ticked (remembered).
+const SOURCE_TOGGLE_STORAGE_KEY = 'toteLookupOptionalSources';
+const sourceToggleInputs = {
+  qt: document.getElementById('source-qt-input'),
+  sideline: document.getElementById('source-sideline-input'),
+};
+
+function selectedSources() {
+  return Object.fromEntries(Object.entries(sourceToggleInputs).map(([key, input]) => [key, input.checked]));
+}
+
+async function loadSourceToggles() {
+  const data = await chrome.storage.local.get(SOURCE_TOGGLE_STORAGE_KEY);
+  const stored = data[SOURCE_TOGGLE_STORAGE_KEY] ?? {};
+  for (const [key, input] of Object.entries(sourceToggleInputs)) input.checked = stored[key] === true;
+}
+
+for (const input of Object.values(sourceToggleInputs)) {
+  input.addEventListener('change', () => {
+    chrome.storage.local.set({ [SOURCE_TOGGLE_STORAGE_KEY]: selectedSources() });
+    toteInput.focus();
+  });
+}
 const COPY_FEEDBACK_MS = 1500;
 const NOT_PERMITTED_TOAST_MESSAGE = 'NOT_PERMITTED ISS';
 const HRV_TOAST_MESSAGE = 'HRV ÜRÜN';
@@ -214,7 +237,6 @@ const WARN_STATUSES = new Set([
   'no_data',
   'not_found',
   'skipped_no_asin',
-  'skipped_too_many',
   'no_datelot_screen',
   'no_qt_tab',
   'partial_failure',
@@ -230,7 +252,11 @@ function badgeClass(status) {
   return 'warn';
 }
 
-function renderSourceStatus(sourceStatus, sourceMessages = {}) {
+function formatSeconds(ms) {
+  return `${(ms / 1000).toFixed(1)} sn`;
+}
+
+function renderSourceStatus(sourceStatus, sourceMessages = {}, timings = {}) {
   const labels = {
     inventory: 'Inventory',
     pandash: 'Pandash',
@@ -243,7 +269,8 @@ function renderSourceStatus(sourceStatus, sourceMessages = {}) {
   const badges = Object.entries(sourceStatus).map(([key, status]) => {
     const badge = document.createElement('span');
     badge.className = `status-badge ${badgeClass(status)}`;
-    badge.textContent = `${labels[key] ?? key}: ${describeSourceStatus(status)}`;
+    const time = typeof timings[key] === 'number' ? ` · ${formatSeconds(timings[key])}` : '';
+    badge.textContent = `${labels[key] ?? key}: ${describeSourceStatus(status)}${time}`;
     if (sourceMessages[key]) badge.title = sourceMessages[key];
     return badge;
   });
@@ -253,6 +280,13 @@ function renderSourceStatus(sourceStatus, sourceMessages = {}) {
   const details = Object.entries(sourceMessages)
     .filter(([key]) => sourceStatus[key] && !OK_STATUSES.has(sourceStatus[key]))
     .map(([key, message]) => buildSourceMessage(`${labels[key] ?? key}: ${message}`));
+
+  if (typeof timings.total === 'number') {
+    const total = document.createElement('span');
+    total.className = 'status-badge ok';
+    total.textContent = `Toplam: ${formatSeconds(timings.total)} (${timings.asins ?? 0} ürün)`;
+    badges.push(total);
+  }
 
   sourceStatusEl.replaceChildren(...badges, ...details);
 }
@@ -417,7 +451,7 @@ async function runLookup(toteNumber, kind = 'container') {
   locationResultsEl.hidden = true;
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_TOTE', toteNumber, kind });
+    const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_TOTE', toteNumber, kind, sources: selectedSources() });
     if (!response) {
       throw new Error('Arka plan betiğinden yanıt alınamadı.');
     }
@@ -425,7 +459,7 @@ async function runLookup(toteNumber, kind = 'container') {
     lastRows = response.rows ?? [];
     lastKind = kind;
     buildTableHead();
-    renderSourceStatus(response.sourceStatus ?? {}, response.sourceMessages ?? {});
+    renderSourceStatus(response.sourceStatus ?? {}, response.sourceMessages ?? {}, response.timings ?? {});
     const pandashStatus = response.sourceStatus?.pandash;
     // A failed (or partly failed) Pandash request leaves DropZones unknown;
     // only a real "no value" answer may be read as NOT_PERMITTED.
@@ -558,7 +592,7 @@ window.addEventListener('focus', () => {
 });
 
 async function init() {
-  await Promise.all([loadColumnOrder(), loadAutoCopy()]);
+  await Promise.all([loadColumnOrder(), loadAutoCopy(), loadSourceToggles()]);
   buildTableHead();
   toteInput.focus();
 }

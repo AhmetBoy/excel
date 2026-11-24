@@ -117,9 +117,6 @@ async function resolvePandash(asins) {
 }
 
 const MAX_PARALLEL_SIDELINE_REQUESTS = 4;
-// Sideline is asked once per ASIN and is slow; a tote with more distinct
-// products than this skips it so the lookup doesn't hang (user's rule).
-const MAX_SIDELINE_VARIETY = 10;
 
 /**
  * Sideline binDescription per ASIN. Sideline takes one item per request,
@@ -129,7 +126,6 @@ const MAX_SIDELINE_VARIETY = 10;
  */
 async function resolveSideline(toteNumber, asins) {
   if (asins.length === 0) return { matches: [], status: 'skipped_no_asin' };
-  if (asins.length > MAX_SIDELINE_VARIETY) return { matches: [], status: 'skipped_too_many' };
 
   const matches = await mapWithConcurrency(asins, MAX_PARALLEL_SIDELINE_REQUESTS, async (asin) => {
     const response = await fetchSidelineItem(toteNumber, asin);
@@ -164,15 +160,25 @@ async function resolveQt(toteNumber) {
 const MAX_PARALLEL_PRODUCT_REQUESTS = 4;
 
 /**
- * FC Research "product" section per ASIN: High Value flag + image.
- * @returns {Promise<{ matches: Array<{asin: string, highValue: boolean|null, imageUrl: string|null, status: string}>, status: string }>}
+ * FC Research "product" section for one id: High Value flag, image and
+ * Expiration Date. The id is an FCSku when the tote has one (its date is
+ * per lot), otherwise an ASIN. `asin` holds the id that was asked.
+ * @returns {Promise<{asin: string, highValue: boolean|null, imageUrl: string|null, expirationDate: string|null, status: string}>}
  */
 async function fetchProductMatch(asin) {
+  const empty = { asin, highValue: null, imageUrl: null, expirationDate: null };
   const response = await fetchFcResearchSection('product', { s: asin });
-  if (response.status !== 'ok') return { asin, highValue: null, imageUrl: null, status: response.status };
+  if (response.status !== 'ok') return { ...empty, status: response.status };
   const parsed = await parseViaOffscreen('PARSE_PRODUCT_HTML', response.html);
-  if (!parsed.found) return { asin, highValue: null, imageUrl: null, status: 'not_found' };
-  return { asin, highValue: parsed.highValue, imageUrl: parsed.imageUrl, title: parsed.title ?? null, status: 'ok' };
+  if (!parsed.found) return { ...empty, status: 'not_found' };
+  return {
+    asin,
+    highValue: parsed.highValue,
+    imageUrl: parsed.imageUrl,
+    title: parsed.title ?? null,
+    expirationDate: parsed.expirationDate ?? null,
+    status: 'ok',
+  };
 }
 
 /**
@@ -261,21 +267,50 @@ const skipped = (extra) => Promise.resolve({ status: 'skipped', ...extra });
  * @param {string} [kind] - 'container' | 'location' | 'product'
  * @returns {Promise<{ toteNumber: string, kind: string, rows: object[], sourceStatus: object, locationHistory?: object[] }>}
  */
-async function lookupTote(toteNumber, kind = 'container') {
-  const plan = SOURCE_PLAN[kind] ?? SOURCE_PLAN.container;
-  const inventory = await resolveInventory(toteNumber);
+/**
+ * @param {{ qt?: boolean, sideline?: boolean }} [sources] - the panel's
+ *   "QT" / "Sideline" checkboxes; a source left out is asked as before.
+ */
+async function lookupTote(toteNumber, kind = 'container', sources = {}) {
+  const basePlan = SOURCE_PLAN[kind] ?? SOURCE_PLAN.container;
+  const plan = {
+    ...basePlan,
+    qt: basePlan.qt && sources.qt !== false,
+    sideline: basePlan.sideline && sources.sideline !== false,
+  };
+  const startedAt = Date.now();
+  // ms from the start of the lookup until each source answered.
+  const timings = {};
+  const timed = (key, promise) =>
+    promise.finally(() => {
+      timings[key] = Date.now() - startedAt;
+    });
+
+  // QT and History don't need the Inventory answer, so they start right away.
+  const qtPromise = plan.qt ? timed('qt', resolveQt(toteNumber)) : skipped({ products: [] });
+  const historyPromise = plan.history
+    ? timed('history', resolveLocationHistory(toteNumber))
+    : skipped({ records: [] });
+
+  const inventory = await timed('inventory', resolveInventory(toteNumber));
   const distinctAsins = [...new Set(inventory.records.map((r) => r.asin).filter(Boolean))];
+  // FC Research product is asked by FCSku (gives the lot's Expiration Date
+  // too), by ASIN only for a row without an FCSku.
+  const productIds = [...new Set(inventory.records.map((r) => r.fcSku || r.asin).filter(Boolean))];
 
   const [pandash, product, sideline, qt, history, prep] = await Promise.all([
-    resolvePandash(distinctAsins),
-    resolveProducts(distinctAsins),
+    timed('pandash', resolvePandash(distinctAsins)),
+    timed('product', resolveProducts(productIds)),
     plan.sideline
-      ? resolveSideline(plan.sidelineContainer ?? toteNumber, distinctAsins)
+      ? timed('sideline', resolveSideline(plan.sidelineContainer ?? toteNumber, distinctAsins))
       : skipped({ matches: [] }),
-    plan.qt ? resolveQt(toteNumber) : skipped({ products: [] }),
-    plan.history ? resolveLocationHistory(toteNumber) : skipped({ records: [] }),
-    plan.prep ? resolvePrep(distinctAsins) : skipped({ matches: [] }),
+    qtPromise,
+    historyPromise,
+    plan.prep ? timed('prep', resolvePrep(distinctAsins)) : skipped({ matches: [] }),
   ]);
+  timings.total = Date.now() - startedAt;
+  timings.asins = distinctAsins.length;
+  console.info('[tote-lookup] timings (ms):', JSON.stringify(timings));
 
   const { rows } = buildResultRows({
     inventoryRecords: inventory.records,
@@ -300,7 +335,7 @@ async function lookupTote(toteNumber, kind = 'container') {
   const sourceMessages = {};
   if (plan.qt && qt.message) sourceMessages.qt = qt.message;
 
-  return { toteNumber, kind, rows, sourceStatus, sourceMessages, locationHistory: history.records };
+  return { toteNumber, kind, rows, sourceStatus, sourceMessages, timings, locationHistory: history.records };
 }
 
 // Safety cap on "-more" pages of one FC Research section.
@@ -570,7 +605,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'LOOKUP_TOTE') return undefined;
 
-  lookupTote(message.toteNumber, message.kind)
+  lookupTote(message.toteNumber, message.kind, message.sources)
     .then(sendResponse)
     .catch((error) =>
       sendResponse({

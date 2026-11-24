@@ -287,3 +287,29 @@ describe('evaluateTote SKT rules', () => {
     expect(cellHighlightClass(readyRow(), 'expirationDate', ctx)).toBeNull();
   });
 });
+
+describe('evaluateTote SKT from FC Research (QT off)', () => {
+  const NOW = new Date(2026, 10, 19);
+  const fc = (expirationDate, overrides = {}) =>
+    readyRow({ expirationDate, expirationSource: 'fcresearch', ...overrides });
+  const codes = (verdict) => verdict.findings.map((f) => f.code).filter(Boolean);
+
+  it('flags an expired / near FC Research date with QT not asked', () => {
+    const verdict = evaluateTote([fc('2026-11-01 00:00:00'), fc('2027-01-05', { fnSku: 'FNB', fcSku: 'FCB' })], { now: NOW });
+    expect(codes(verdict)).toEqual(['skt_expired']);
+    expect(messages(verdict)).toContain('1 geçmiş, 1 çok yaklaşmış');
+  });
+
+  it('keeps the tote ready for a far FC Research date', () => {
+    expect(evaluateTote([fc('2029-04-10')], { now: NOW }).ready).toBe(true);
+  });
+
+  it('never asks for an SKT from an FC Research row (empty may mean not dated)', () => {
+    const verdict = evaluateTote([fc('None')], { now: NOW });
+    expect(codes(verdict)).toEqual([]);
+  });
+
+  it('highlights the expired FC Research date cell', () => {
+    expect(cellHighlightClass(fc('2026-01-01'), 'expirationDate', { moveNeeded: false, now: NOW })).toBe('cell-action');
+  });
+});

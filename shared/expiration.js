@@ -18,6 +18,36 @@ function utcDate(year, month, day) {
   return date.getUTCMonth() === month && date.getUTCDate() === day ? date : null;
 }
 
+// The warehouse (XSA9) is in Turkey.
+const WAREHOUSE_TIME_ZONE = 'Europe/Istanbul';
+const dayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: WAREHOUSE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Calendar day of an instant in the warehouse's time zone, as midnight UTC. */
+function warehouseDay(instant) {
+  if (Number.isNaN(instant.getTime())) return null;
+  const [y, mo, d] = dayFormatter.format(instant).split('-').map(Number);
+  return utcDate(y, mo - 1, d);
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Writes a date the way QT shows it ("Apr 17 2029"), so dates from FC
+ * Research look the same in the table. A value that isn't a date is
+ * returned unchanged.
+ * @param {string|null|undefined} text
+ */
+export function formatExpirationDate(text) {
+  const date = parseExpirationDate(text);
+  if (!date) return text ?? null;
+  return `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCDate()} ${date.getUTCFullYear()}`;
+}
+
 /**
  * Parses a QT expiration date. Seen live: "Apr 10 2029". Also accepted:
  * "10-APR-2029", "2029-04-10", "10.04.2029" / "10/04/2029" (day first).
@@ -30,6 +60,17 @@ export function parseExpirationDate(text) {
   if (m && m[1] in MONTHS) return utcDate(Number(m[3]), MONTHS[m[1]], Number(m[2]));
   m = /^(\d{1,2})[- ]([a-zçğıöşü]{3})[a-zçğıöşü]*[- ](\d{4})$/.exec(value);
   if (m && m[2] in MONTHS) return utcDate(Number(m[3]), MONTHS[m[2]], Number(m[1]));
+  // FC Research gives an instant: seen live "2029-04-16T21:00:00.000Z",
+  // which is midnight Apr 17 in Istanbul. A value with a zone (Z / +03:00)
+  // or an epoch number is read as the warehouse's calendar day.
+  m = /^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:z|[+-]\d{2}:?\d{2})$/.exec(value);
+  if (m) return warehouseDay(new Date(value.toUpperCase()));
+  if (/^\d{10}(\d{3})?$/.test(value)) {
+    return warehouseDay(new Date(value.length === 10 ? Number(value) * 1000 : Number(value)));
+  }
+  // A date-time without a zone: the day as written.
+  m = /^(\d{4})-(\d{2})-(\d{2})[t ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.exec(value);
+  if (m) return utcDate(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (m) return utcDate(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   m = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(value);

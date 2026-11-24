@@ -23,7 +23,7 @@ const PARSERS = {
   },
   PARSE_PRODUCT_HTML: {
     parse: parseProductHtml,
-    empty: { found: false, highValue: null, imageUrl: null, title: null },
+    empty: { found: false, highValue: null, imageUrl: null, title: null, expirationDate: null },
   },
   PARSE_PREP_HTML: {
     parse: parsePrepHtml,

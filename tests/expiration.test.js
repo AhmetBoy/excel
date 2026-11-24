@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyExpiration, parseExpirationDate } from '../shared/expiration.js';
+import { classifyExpiration, formatExpirationDate, parseExpirationDate } from '../shared/expiration.js';
 
 const NOW = new Date(2026, 10, 19); // 19 Nov 2026, local time
 
@@ -44,5 +44,26 @@ describe('classifyExpiration', () => {
 
   it('flags text that is not a date', () => {
     expect(classifyExpiration('soon', NOW)).toBe('unreadable');
+  });
+});
+
+describe('parseExpirationDate timestamps (FC Research)', () => {
+  const day = (d) => d?.toISOString().slice(0, 10);
+  it('keeps the day of date-time values', () => {
+    expect(day(parseExpirationDate('2027-03-15 00:00:00'))).toBe('2027-03-15');
+    expect(day(parseExpirationDate('2027-03-15T00:00:00Z'))).toBe('2027-03-15');
+    expect(day(parseExpirationDate('2027-03-15T00:00:00.000+03:00'))).toBe('2027-03-15');
+  });
+  it('reads the live FC Research value as the Istanbul day', () => {
+    // 21:00Z is 00:00 the next day in Istanbul (UTC+3).
+    expect(day(parseExpirationDate('2029-04-16T21:00:00.000Z'))).toBe('2029-04-17');
+    expect(formatExpirationDate('2029-04-16T21:00:00.000Z')).toBe('Apr 17 2029');
+    expect(formatExpirationDate('Apr 10 2029')).toBe('Apr 10 2029');
+    expect(formatExpirationDate('None')).toBe('None');
+  });
+
+  it('reads epoch seconds and milliseconds', () => {
+    expect(day(parseExpirationDate('1805068800'))).toBe('2027-03-15');
+    expect(day(parseExpirationDate('1805068800000'))).toBe('2027-03-15');
   });
 });

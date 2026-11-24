@@ -64,6 +64,23 @@ function findImage(root) {
   return src;
 }
 
+// "Expiration Date" row: <td class="timestamp">. Empty for a product
+// without a date. The page may keep the raw value in an attribute and
+// format it with JS, so attributes are read when the text is empty.
+function findExpirationDate(root) {
+  for (const th of root.querySelectorAll('th, dt')) {
+    const k = key(th.textContent);
+    if (k !== 'expirationdate' && k !== 'expiration') continue;
+    const cell = th.nextElementSibling;
+    if (!cell) return null;
+    const value =
+      text(cell) ||
+      normalizeValue(cell.getAttribute('data-timestamp') ?? cell.getAttribute('data-value') ?? cell.getAttribute('title') ?? '');
+    return value || null;
+  }
+  return null;
+}
+
 /**
  * Parses the FC Research "product" section for one ASIN.
  *
@@ -75,7 +92,7 @@ export function parseProductHtml(html) {
   const doc = new DOMParser().parseFromString(html ?? '', 'text/html');
   const root = doc.body;
   if (!root || !root.querySelector('table, dl, img')) {
-    return { found: false, highValue: null, imageUrl: null, title: null };
+    return { found: false, highValue: null, imageUrl: null, title: null, expirationDate: null };
   }
 
   const fields = collectFields(root);
@@ -96,5 +113,6 @@ export function parseProductHtml(html) {
     highValue,
     imageUrl: findImage(root),
     title: titleField?.value || null,
+    expirationDate: findExpirationDate(root),
   };
 }
