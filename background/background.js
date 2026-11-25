@@ -2,7 +2,7 @@ import { parsePandashJson, matchPandashResultsToAsins } from '../shared/parsers/
 import { buildResultRows } from '../shared/matchingService.js';
 import { fetchInventoryHtml } from './services/inventoryService.js';
 import { fetchPandashRaw } from './services/pandashService.js';
-import { fetchQtDatelotForTote } from './services/qtService.js';
+import { changeItemsToSellable, fetchQtDatelotForTote } from './services/qtService.js';
 import { fetchAtlasReportRaw } from './services/atlasService.js';
 import { parseAtlasProcessReports } from '../shared/parsers/atlasReportParser.js';
 import { fetchFcResearchSection, fetchFcResearchSectionMore } from './services/fcResearchService.js';
@@ -617,6 +617,40 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     );
 
   return true; // keep the message channel open for the async response
+});
+
+/** Checks and cleans the items the panel asks to change. */
+function sellableItemsOf(items) {
+  if (!Array.isArray(items) || items.length === 0) throw new Error('Değiştirilecek ürün yok.');
+  return items.map((item) => {
+    const scan = String(item?.scan ?? '').trim();
+    const quantity = Number(item?.quantity);
+    if (!scan) throw new Error('Ürünün LPN / FCSku bilgisi yok.');
+    if (!Number.isInteger(quantity) || quantity < 1) throw new Error(`${scan}: adet okunamadı.`);
+    return { scan, fcSku: item.fcSku ? String(item.fcSku).trim() : null, quantity };
+  });
+}
+
+// PENDING_RESEARCH / EXPIRED -> Sellable in QT EditItems (writes to QT).
+// Only sent from a "Sellable'a çek" button (one row or all), never automatically.
+// All items go in one QT run: one mode pick, one tote scan, one "Change container".
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'QT_CHANGE_TO_SELLABLE') return undefined;
+
+  (async () => {
+    if (!(await isFeatureAllowed('sellableFix'))) {
+      return { status: 'error', message: 'Bu özellik giriş yapılan profilde kapalı.', items: [], log: [] };
+    }
+    const toteNumber = String(message.toteNumber ?? '').trim();
+    if (!toteNumber) throw new Error('Tote numarası yok.');
+    return changeItemsToSellable(toteNumber, sellableItemsOf(message.items), {
+      parsePage: (html) => parseViaOffscreen('PARSE_QT_PAGE', html),
+    });
+  })()
+    .then(sendResponse)
+    .catch((error) => sendResponse({ status: 'error', message: String(error?.message ?? error), items: [], log: [] }));
+
+  return true;
 });
 
 // "Tote Taraması gerekiyor" fix: opens the tote / csX as the PRIMARY

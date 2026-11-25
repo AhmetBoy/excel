@@ -234,6 +234,178 @@ async function prepareNextScan(page, parsePage) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Change to Sellable (writes!). Captured live 2026-11-25 (HARs + saved pages):
+//
+//   SelectMode            -> "Select mode"        (header button "Change mode")
+//   Input "EACH"          -> workflow COMPLETE, /end, new one -> "Scan container"
+//   Input <tote>          -> "Scan item"
+//   Input <LPN|FCSku>     -> "Select item" (radio 0,1… with FCSku) or straight on
+//   Input "<index>"       -> "Select new inventory state"
+//   Input "INVENTORY"     -> "Confirm change" ("Targeted Inventory State: Inventory",
+//                            "Quantity To Change: 1")
+//   Confirm               -> "Scan item" (next unit / next item)
+//   Done                  -> workflow COMPLETE, /end, new one -> "Scan container"
+//
+// EACH mode changes one unit per pass ("Quantity To Change: 1"), so a row of
+// quantity N takes N passes; a pass the screen says moves more is counted
+// as that many, never more than the row still has.
+// Every step checks the screen and the choice it needs before sending; a
+// surprise stops the run before "Confirm" and leaves with "Change container".
+
+const SCREEN = {
+  selectMode: 'select mode',
+  scanContainer: 'scan container',
+  scanItem: 'scan item',
+  selectItem: 'select item',
+  selectState: 'select new inventory state',
+  confirm: 'confirm change',
+};
+const MODE_EACH = 'EACH';
+const STATE_INVENTORY = 'INVENTORY';
+const ACTION_SELECT_MODE = 'SelectMode';
+const ACTION_CONFIRM = 'Confirm';
+
+function isScreen(page, name) {
+  return (page.screen ?? '').trim().toLowerCase() === name;
+}
+
+function expectScreen(page, name) {
+  if (!isScreen(page, name)) {
+    throw new QtError(`Beklenen QT ekranı "${name}", gelen: ${describe(page)}`, 'unexpected_screen');
+  }
+}
+
+function expectOption(page, value) {
+  if (!(page.options ?? []).some((o) => o.value === value)) {
+    throw new QtError(`"${page.screen}" ekranında "${value}" seçeneği yok (${describe(page)}).`, 'unexpected_screen');
+  }
+}
+
+function sameSku(a, b) {
+  return Boolean(a && b) && a.trim().toUpperCase() === b.trim().toUpperCase();
+}
+
+/**
+ * Scans `item` on "Scan item" and confirms it as Sellable.
+ * @param {number} remaining - units of the row not changed yet
+ * @returns {Promise<{ page: object, units: number }>}
+ */
+async function changeOneUnit(page, item, remaining, parsePage, log) {
+  expectScreen(page, SCREEN.scanItem);
+  page = await act(page, ACTION_INPUT, item.scan, parsePage, log);
+  if (isScreen(page, SCREEN.scanItem) && page.messages.length > 0) {
+    throw new QtError(`QT: ${page.messages.join(' / ')}`, 'item_rejected');
+  }
+
+  if (isScreen(page, SCREEN.selectItem)) {
+    const matches = page.options.filter((o) => sameSku(o.fcSku, item.fcSku));
+    if (matches.length !== 1) {
+      const listed = page.options.map((o) => o.fcSku ?? '?').join(', ');
+      throw new QtError(
+        `"Select item" listesinde FCSku ${item.fcSku ?? '?'} ${matches.length === 0 ? 'yok' : 'birden fazla'} (liste: ${listed}).`,
+        'unexpected_screen'
+      );
+    }
+    page = await act(page, ACTION_INPUT, matches[0].value, parsePage, log);
+  }
+
+  expectScreen(page, SCREEN.selectState);
+  expectOption(page, STATE_INVENTORY);
+  page = await act(page, ACTION_INPUT, STATE_INVENTORY, parsePage, log);
+
+  expectScreen(page, SCREEN.confirm);
+  const text = page.text ?? '';
+  if (!/targeted inventory state:\s*inventory/i.test(text)) {
+    throw new QtError(`Onay ekranı Inventory (Sellable) hedeflemiyor: ${text.slice(0, 200)}`, 'unexpected_screen');
+  }
+  const qty = /quantity to change:\s*(\d+)/i.exec(text);
+  const units = qty ? Number(qty[1]) : NaN;
+  if (!(units >= 1 && units <= remaining)) {
+    throw new QtError(
+      `Onay ekranında değişecek adet ${qty?.[1] ?? '?'}, bu üründe kalan ${remaining} — onaylanmadı.`,
+      'unexpected_screen'
+    );
+  }
+  if (!page.pageActions.includes(ACTION_CONFIRM)) {
+    throw new QtError('Onay ekranında Confirm butonu yok.', 'unexpected_screen');
+  }
+  return { page: await act(page, ACTION_CONFIRM, ACTION_CONFIRM, parsePage, log), units };
+}
+
+/** Puts the workflow on "Scan container" in EACH mode. */
+async function openInEachMode(parsePage, log) {
+  let page = await loadPage(parsePage, log);
+  log.push(`açılış → "${page.screen ?? '?'}"`);
+  if (!isScreen(page, SCREEN.selectMode)) {
+    if (!page.pageActions.includes(ACTION_SELECT_MODE)) {
+      throw new QtError(`"Change mode" butonu bulunamadı (${describe(page)}).`, 'unexpected_screen');
+    }
+    page = await act(page, ACTION_SELECT_MODE, ACTION_SELECT_MODE, parsePage, log);
+  }
+  expectScreen(page, SCREEN.selectMode);
+  expectOption(page, MODE_EACH);
+  page = await act(page, ACTION_INPUT, MODE_EACH, parsePage, log);
+  expectScreen(page, SCREEN.scanContainer);
+  return page;
+}
+
+// Leaves the tote with "Change container", never confirming anything open.
+async function leaveTote(page, parsePage, log) {
+  try {
+    if (!page.pageActions?.includes(ACTION_CHANGE_CONTAINER)) page = await loadPage(parsePage, log);
+    if (page.pageActions.includes(ACTION_CHANGE_CONTAINER)) {
+      await act(page, ACTION_CHANGE_CONTAINER, ACTION_CHANGE_CONTAINER, parsePage, log);
+    }
+  } catch (error) {
+    log.push(`tote'tan çıkılamadı: ${error?.message ?? error}`);
+  }
+}
+
+async function changeToSellable(toteNumber, items, parsePage, log) {
+  const results = items.map((item) => ({ ...item, changed: 0, status: 'pending', message: null }));
+  let page = await openInEachMode(parsePage, log);
+  page = await act(page, ACTION_INPUT, toteNumber, parsePage, log);
+  if (!isScreen(page, SCREEN.scanItem)) {
+    const extra = page.messages.length ? page.messages.join(' / ') : describe(page);
+    await leaveTote(page, parsePage, log);
+    throw new QtError(`Tote açılamadı: ${extra}`, 'unexpected_screen');
+  }
+
+  let stopped = false;
+  for (const result of results) {
+    if (stopped) {
+      result.status = 'skipped';
+      continue;
+    }
+    try {
+      while (result.changed < result.quantity) {
+        const pass = await changeOneUnit(page, result, result.quantity - result.changed, parsePage, log);
+        page = pass.page;
+        result.changed += pass.units;
+        log.push(`${result.scan}: ${result.changed}/${result.quantity} Sellable`);
+      }
+      result.status = 'ok';
+    } catch (error) {
+      result.status = error instanceof QtError ? error.status : 'error';
+      result.message = String(error?.message ?? error);
+      // QT refusing the scan leaves it on "Scan item", so the next item can
+      // go on. Any other surprise stops the run.
+      if (result.status === 'item_rejected') page = await loadPage(parsePage, log);
+      else stopped = true;
+    }
+  }
+
+  await leaveTote(page, parsePage, log);
+
+  const failed = results.filter((r) => r.status !== 'ok');
+  return {
+    status: failed.length === 0 ? 'ok' : results.some((r) => r.changed > 0) ? 'partial_failure' : 'error',
+    items: results,
+    log,
+  };
+}
+
 // The workflow is one per user on the server: two lookups at once would
 // step on each other, so they run one after another.
 let queue = Promise.resolve();
@@ -271,4 +443,32 @@ export function fetchQtDatelotForTote(toteNumber, { parsePage }) {
 /** Resolves once every queued lookup and its "Change container" are done. */
 export function whenQtIdle() {
   return queue;
+}
+
+/**
+ * Changes items of a tote to Sellable (Owner UNOWNED, Disposition SELLABLE)
+ * in QT EditItems, EACH mode, one unit at a time. Runs in the same queue as
+ * the datelot lookups, so the two never step on each other.
+ *
+ * @param {string} toteNumber
+ * @param {Array<{ scan: string, fcSku: string|null, quantity: number }>} items
+ *   scan = what is typed on "Scan item" (LPN, else FCSku / ASIN)
+ * @param {{ parsePage: (html: string) => Promise<object> }} deps
+ * @returns {Promise<{ status: string, items: object[], message?: string, log: string[] }>}
+ */
+export function changeItemsToSellable(toteNumber, items, { parsePage }) {
+  const log = [];
+  const run = queue.then(() =>
+    changeToSellable(toteNumber, items, parsePage, log).catch((error) => {
+      const steps = log.length > 0 ? ` [adımlar: ${log.join(' → ')}]` : '';
+      return {
+        status: error instanceof QtError ? error.status : 'error',
+        message: `${String(error?.message ?? error)}${steps}`,
+        items: items.map((item) => ({ ...item, changed: 0, status: 'skipped' })),
+        log,
+      };
+    })
+  );
+  queue = run.catch(() => {});
+  return run;
 }

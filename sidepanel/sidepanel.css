@@ -360,6 +360,18 @@ button:hover {
   font-weight: 400;
 }
 
+.sellable-button {
+  font-size: 12px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sellable-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .receive-opener {
   margin-top: 6px;
   display: flex;

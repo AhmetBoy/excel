@@ -7,6 +7,8 @@ export const COLUMNS = [
   { key: 'dropZone', label: 'DropZone' },
   { key: 'consumer', label: 'Consumer' },
   { key: 'disposition', label: 'Disposition' },
+  // "Sellable'a çek" button (tote scans only); filled by the panel.
+  { key: 'sellableAction', label: 'İşlem', toteOnly: true },
   { key: 'binDescription', label: 'Bin Description' },
   { key: 'hrv', label: 'HRV' },
   { key: 'prep', label: 'Prep', productOnly: true },
@@ -112,7 +114,10 @@ export function describePrep(row) {
  */
 export function columnsForKind(columns, kind, { showImages = true } = {}) {
   return columns.filter(
-    (column) => (kind === 'product' || !column.productOnly) && (showImages || column.toggle !== 'images')
+    (column) =>
+      (kind === 'product' || !column.productOnly) &&
+      (kind === 'container' || !column.toteOnly) &&
+      (showImages || column.toggle !== 'images')
   );
 }
 
@@ -229,7 +234,11 @@ function imageCell(row) {
   return img;
 }
 
-export function renderRows(tbody, rows, columns = COLUMNS, getCellClass = null) {
+/**
+ * @param {(row: object, key: string) => Node|null} [getCellNode] - content
+ *   for a cell the panel builds itself (e.g. a button); null leaves it empty
+ */
+export function renderRows(tbody, rows, columns = COLUMNS, getCellClass = null, getCellNode = null) {
   tbody.replaceChildren();
 
   if (rows.length === 0) {
@@ -249,6 +258,9 @@ export function renderRows(tbody, rows, columns = COLUMNS, getCellClass = null) 
       const td = document.createElement('td');
       if (column.key === 'image') {
         td.appendChild(imageCell(row));
+      } else if (column.key === 'sellableAction') {
+        const node = getCellNode?.(row, column.key);
+        if (node) td.appendChild(node);
       } else {
         const renderCell = CELL_RENDERERS[column.key];
         td.textContent = renderCell ? renderCell(row) : displayOrMissing(row[column.key]);

@@ -52,7 +52,10 @@ showImagesInput.addEventListener('change', () => {
 });
 
 function visibleColumns() {
-  return columnsForKind(currentColumns, lastKind, { showImages: showImagesInput.checked });
+  const columns = columnsForKind(currentColumns, lastKind, { showImages: showImagesInput.checked });
+  // "İşlem" only when a row can be changed to Sellable.
+  const showSellable = sellableAllowed && lastRows.some(needsSellableFix);
+  return showSellable ? columns : columns.filter((column) => column.key !== 'sellableAction');
 }
 const filterInput = document.getElementById('filter-input');
 const resultsWrapperEl = document.getElementById('results-wrapper');
@@ -380,6 +383,132 @@ function buildReceiveOpener(toteNumber) {
   return box;
 }
 
+// "Sellable'a çek": PENDING_RESEARCH / EXPIRED rows are changed to Sellable
+// in QT (EACH mode, one unit per pass). Only on a click, after a confirm.
+let sellableAllowed = false;
+// Rows being changed right now (by scan value), so a re-render while the
+// run is going keeps their button disabled.
+const sellableRunning = new Set();
+
+function needsSellableFix(row) {
+  const consumer = (row.consumer ?? '').trim().toUpperCase();
+  const disposition = (row.disposition ?? '').trim().toUpperCase();
+  return consumer === 'PENDING_RESEARCH' || disposition === 'EXPIRED';
+}
+
+function sellableItemOf(row) {
+  return { scan: row.lpn || row.fcSku || row.asin || '', fcSku: row.fcSku ?? null, quantity: Number(row.quantity) };
+}
+
+function describeSellableResult(responses) {
+  const items = responses.flatMap((response) => response.items ?? []);
+  const ok = items.filter((item) => item.status === 'ok');
+  const units = items.reduce((sum, item) => sum + (item.changed ?? 0), 0);
+  const parts = [];
+  if (ok.length > 0) parts.push(`✔ ${ok.length}/${items.length} ürün Sellable (${units} adet)`);
+  for (const item of items) {
+    if (item.status === 'ok') continue;
+    if (item.status === 'skipped') {
+      parts.push(`– ${item.scan}: yapılmadı`);
+      continue;
+    }
+    const done = item.changed > 0 ? ` (${item.changed}/${item.quantity} yapıldı)` : '';
+    parts.push(`✖ ${item.scan}${done}: ${item.message ?? 'başarısız'}`);
+  }
+  for (const response of responses) if (response.message) parts.push(response.message);
+  return parts.join(' · ') || 'Sonuç alınamadı.';
+}
+
+/**
+ * Changes `rows` to Sellable. Rows of one container go in one QT run
+ * (one mode pick, one tote scan, one "Change container"); QT allows one
+ * workflow per user, so the items themselves go one after another.
+ */
+async function runSellableFix(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    // The row's own container (the tote QT has to open), else the scanned one.
+    const tote = row.container || lastToteNumber;
+    if (!groups.has(tote)) groups.set(tote, []);
+    groups.get(tote).push(sellableItemOf(row));
+  }
+  const all = [...groups.values()].flat();
+  const units = all.reduce((sum, item) => sum + item.quantity, 0);
+  const list = all.slice(0, 15).map((item) => `• ${item.scan} (${item.quantity} adet)`).join('
+');
+  const more = all.length > 15 ? `
+… ve ${all.length - 15} ürün daha` : '';
+  const ok = window.confirm(
+    `${[...groups.keys()].join(', ')} içindeki ${all.length} ürün (${units} adet) QT'de Sellable'a çekilecek:
+
+${list}${more}
+
+` +
+      "QT EACH moduna alınır, her adet okutulup Inventory'ye (UNOWNED / SELLABLE) onaylanır. Devam edilsin mi?"
+  );
+  if (!ok) return;
+
+  for (const item of all) sellableRunning.add(item.scan);
+  applyFilterAndRender();
+  const responses = [];
+  try {
+    for (const [toteNumber, items] of groups) {
+      let response;
+      try {
+        response = await chrome.runtime.sendMessage({ type: 'QT_CHANGE_TO_SELLABLE', toteNumber, items });
+        if (!response) throw new Error('Arka plan betiğinden yanıt alınamadı.');
+      } catch (error) {
+        response = { status: 'error', message: String(error?.message ?? error), items: [] };
+      }
+      if (response.log?.length) console.info(`[tote-lookup] Sellable adımları (${toteNumber}):`, response.log.join(' → '));
+      responses.push(response);
+    }
+  } finally {
+    sellableRunning.clear();
+  }
+
+  // Search the tote again so the table shows what Inventory says now.
+  if (lastKind === 'container' && lastToteNumber) await runLookup(lastToteNumber, 'container');
+  else applyFilterAndRender();
+  const allOk = responses.every((response) => response.status === 'ok');
+  showToast(describeSellableResult(responses), { variant: allOk ? 'info' : null, durationMs: allOk ? 6000 : 20000 });
+}
+
+/** "Tümünü Sellable'a çek" in the verdict, when more than one row needs it. */
+function buildSellableAllButton(rows) {
+  const eligible = sellableAllowed ? rows.filter((row) => needsSellableFix(row) && sellableItemOf(row).scan) : [];
+  if (eligible.length < 2) return null;
+  const units = eligible.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+  const box = document.createElement('div');
+  box.className = 'receive-opener';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = `Tümünü Sellable'a çek (${eligible.length} ürün, ${units} adet)`;
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = `Çekiliyor… (${eligible.length} ürün)`;
+    await runSellableFix(eligible);
+    button.disabled = false;
+  });
+  box.appendChild(button);
+  return box;
+}
+
+function buildSellableButton(row) {
+  if (!sellableAllowed || lastKind !== 'container' || !row.container || !needsSellableFix(row)) return null;
+  const item = sellableItemOf(row);
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'sellable-button';
+  const running = sellableRunning.has(item.scan);
+  button.textContent = running ? 'Çekiliyor…' : "Sellable'a çek";
+  button.disabled = running || sellableRunning.size > 0 || !item.scan;
+  button.title = item.scan ? `${item.scan} · ${item.quantity} adet` : 'LPN / FCSku yok';
+  // The row's own container (the tote QT has to open), else the scanned one.
+  button.addEventListener('click', () => runSellableFix([row]));
+  return button;
+}
+
 // Always evaluated on the full tote (lastRows), never the filtered view,
 // so typing in the filter box can't make a tote look ready.
 function renderToteVerdict(rows, options) {
@@ -413,6 +542,13 @@ function renderToteVerdict(rows, options) {
     }
   }
 
+  // Every PENDING_RESEARCH / EXPIRED row of the tote at once.
+  const sellableAll = buildSellableAllButton(rows);
+  if (sellableAll) {
+    sellableAll.classList.add('verdict', 'verdict-action');
+    items.push(sellableAll);
+  }
+
   const counts = document.createElement('div');
   counts.className = 'verdict-counts';
   counts.textContent = `Toplam ürün: ${verdict.totalQuantity} · Çeşit: ${verdict.variety}`;
@@ -434,7 +570,8 @@ function applyFilterAndRender() {
       ? row.highValue === true
         ? 'cell-hrv'
         : null
-      : cellHighlightClass(row, key, highlightContext)
+      : cellHighlightClass(row, key, highlightContext),
+    (row) => buildSellableButton(row)
   );
 }
 
@@ -458,6 +595,7 @@ async function runLookup(toteNumber, kind = 'container') {
 
     lastRows = response.rows ?? [];
     lastKind = kind;
+    sellableAllowed = kind === 'container' && (await isFeatureAllowed('sellableFix'));
     buildTableHead();
     renderSourceStatus(response.sourceStatus ?? {}, response.sourceMessages ?? {}, response.timings ?? {});
     const pandashStatus = response.sourceStatus?.pandash;

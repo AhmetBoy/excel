@@ -99,15 +99,37 @@ export function parseQtPage(html) {
   const workflow = doc.querySelector('#workflow');
   const heading = workflow?.querySelector('.aft-tool-action-box h1') ?? workflow?.querySelector('h1');
 
-  const actions = [];
-  for (const el of (workflow ?? doc).querySelectorAll('[data-click-action]')) {
-    try {
-      const action = JSON.parse(el.getAttribute('data-click-action')).action;
-      if (action && !actions.includes(action)) actions.push(action);
-    } catch {
-      // ignore malformed attribute
+  const readActions = (root) => {
+    const found = [];
+    for (const el of root.querySelectorAll('[data-click-action]')) {
+      if (el.closest('.aft-tool-hide')) continue;
+      try {
+        const action = JSON.parse(el.getAttribute('data-click-action')).action;
+        if (action && !found.includes(action)) found.push(action);
+      } catch {
+        // ignore malformed attribute
+      }
     }
-  }
+    return found;
+  };
+  const actions = readActions(workflow ?? doc);
+  // Buttons outside #workflow too: "Confirm" on "Confirm change" and
+  // "SelectMode" (Change mode, in the header) sit there.
+  const pageActions = readActions(doc);
+
+  // Radio choices of the step ("Select item": 0, 1…; "Select new inventory
+  // state": INVENTORY, PENDING_RESEARCH…; "Select mode": EACH…). The
+  // FCSku shown in an item's label is kept for picking the right item.
+  const options = Array.from((workflow ?? doc).querySelectorAll('input[type="radio"]')).map((input) => {
+    const label = input.closest('label') ?? input.parentElement;
+    const details = parseDefinitionList(label?.querySelector('dl.a-definition-list'));
+    return {
+      value: input.getAttribute('value') ?? '',
+      text: normalizeValue(label?.textContent ?? ''),
+      fcSku: details.fcSku,
+      quantity: details.quantity,
+    };
+  });
 
   const hasTextInput = Boolean(
     workflow?.querySelector('form input[type="text"], form input[type="search"], form input:not([type])')
@@ -145,6 +167,9 @@ export function parseQtPage(html) {
     screen: normalizeValue(heading?.textContent ?? '') || null,
     hasTextInput,
     actions,
+    pageActions,
+    options,
+    text: visibleText,
     products,
     messages,
   };
