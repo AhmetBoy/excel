@@ -236,7 +236,7 @@ function tableRow(row) {
   const binCell = el('td');
   if (action?.bin) {
     binCell.append(el('strong', action.bin));
-    if (zone) binCell.append(el('div', `Kat ${zone.floor} · ${zone.aisle}`, 'ua-sub'));
+    if (zone) binCell.append(el('div', `${zone.tower} Pick Tower · ${zone.label}`, 'ua-sub'));
   } else {
     binCell.textContent = '—';
   }
@@ -323,7 +323,10 @@ function renderInsights(rows, nowMs) {
   const { crowdedAisles } = locationBreakdown(rows);
   for (const aisle of crowdedAisles) {
     const names = aisle.logins.map((login) => rows.find((row) => row.login === login)?.name ?? login);
-    lines.push({ level: 'info', text: `${aisle.zone} koridorunda ${names.length} kişi: ${names.join(', ')}` });
+    lines.push({
+      level: 'info',
+      text: `${aisle.tower} Pick Tower · ${aisle.zone} koridorunda ${names.length} kişi: ${names.join(', ')}`,
+    });
   }
 
   const missing = by('none');
@@ -334,27 +337,47 @@ function renderInsights(rows, nowMs) {
   );
 }
 
-/** Associates currently doing the chosen action, per floor (ranked bars). */
+function floorBar(name, count, max, tooltip) {
+  const row = el('div', null, 'ua-floor-row');
+  row.title = tooltip;
+  const track = el('div', null, 'ua-floor-track');
+  const fill = el('div', null, 'ua-floor-fill');
+  fill.style.width = `${(count / max) * 100}%`;
+  track.append(fill);
+  row.append(el('span', name, 'ua-floor-name'), track, el('span', `${count} kişi`, 'ua-floor-count'));
+  return row;
+}
+
+/**
+ * Associates currently doing the chosen action, per pick tower: A, B, C
+ * with a bar per floor ("Kat 1 · 3 kişi"), D and M (one floor) as one bar.
+ */
 function renderFloors(rows) {
-  const { floors } = locationBreakdown(rows);
-  if (floors.length === 0) {
+  const { towers } = locationBreakdown(rows);
+  if (towers.length === 0) {
     floorsEl.replaceChildren();
     return;
   }
-  const max = Math.max(...floors.map((f) => f.count));
-  const title = el('div', `Şu an ${typeLabel(typeSelect.value)} yapanların katları`, 'ua-section-title');
-  const list = el('div', null, 'ua-floor-list');
-  for (const { floor, count } of floors) {
-    const row = el('div', null, 'ua-floor-row');
-    row.title = `Kat ${floor}: ${count} kişi`;
-    const track = el('div', null, 'ua-floor-track');
-    const fill = el('div', null, 'ua-floor-fill');
-    fill.style.width = `${(count / max) * 100}%`;
-    track.append(fill);
-    row.append(el('span', `Kat ${floor}`, 'ua-floor-name'), track, el('span', `${count} kişi`, 'ua-floor-count'));
-    list.append(row);
-  }
-  floorsEl.replaceChildren(title, list);
+  // One scale for every bar, so towers compare at a glance.
+  const max = Math.max(...towers.flatMap((t) => (t.multiFloor ? t.floors.map((f) => f.count) : [t.count])));
+  const title = el('div', `Şu an ${typeLabel(typeSelect.value)} yapanlar — pick tower / kat`, 'ua-section-title');
+  const groups = towers.map((tower) => {
+    const group = el('div', null, 'ua-tower');
+    const name = `${tower.tower} Pick Tower`;
+    if (!tower.multiFloor) {
+      group.append(floorBar(name, tower.count, max, `${name}: ${tower.count} kişi (tek kat)`));
+      return group;
+    }
+    const head = el('div', null, 'ua-tower-head');
+    head.append(el('span', name), el('span', `${tower.count} kişi`, 'ua-tower-total'));
+    const list = el('div', null, 'ua-floor-list');
+    for (const { floor, count } of tower.floors) {
+      list.append(floorBar(`Kat ${floor}`, count, max, `${name} Kat ${floor}: ${count} kişi`));
+    }
+    group.append(head, list);
+    return group;
+  });
+  floorsEl.replaceChildren(title, ...groups);
 }
 
 function renderStatus(nowMs) {

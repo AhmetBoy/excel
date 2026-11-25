@@ -313,3 +313,12 @@ describe('evaluateTote SKT from FC Research (QT off)', () => {
     expect(cellHighlightClass(fc('2026-01-01'), 'expirationDate', { moveNeeded: false, now: NOW })).toBe('cell-action');
   });
 });
+
+describe('WORK_ORDER consumer', () => {
+  it('asks to take the product to the CUBISCAN instead of "Beklenmeyen Consumer"', () => {
+    const verdict = evaluateTote([readyRow({ consumer: 'WORK_ORDER' })]);
+    expect(verdict.ready).toBe(false);
+    expect(verdict.findings).toEqual([{ level: 'cubiscan', message: 'Lütfen ürünü ölçüm cihazına (CUBISCAN) götürün.' }]);
+    expect(cellHighlightClass(readyRow({ consumer: 'WORK_ORDER' }), 'consumer', { moveNeeded: false })).toBe('cell-cubiscan');
+  });
+});

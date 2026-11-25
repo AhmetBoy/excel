@@ -7,6 +7,9 @@ const EDIT_CONSUMER = 'PENDING_RESEARCH';
 const PICKING_CONSUMER = 'CUSTOMER_SHIPMENT';
 // Product is still held by Problem Solve: informational, wait for it to drop.
 const PROBLEM_SOLVE_CONSUMER = 'PROBLEM_SOLVE';
+// Product has to be measured: take it to the CUBISCAN.
+const CUBISCAN_CONSUMER = 'WORK_ORDER';
+export const CUBISCAN_MESSAGE = 'Lütfen ürünü ölçüm cihazına (CUBISCAN) götürün.';
 const READY_DISPOSITION = 'SELLABLE';
 // Not a Damage/İmha case: the product needs its SKT entered.
 const EXPIRED_DISPOSITION = 'EXPIRED';
@@ -270,11 +273,15 @@ export function evaluateTote(rows, { pandashOk = true, qtStatus, now = new Date(
       message: "Problem Solve'dan düşmesi bekleniyor",
     });
   }
+  if (consumers.includes(CUBISCAN_CONSUMER)) {
+    findings.push({ level: 'cubiscan', message: CUBISCAN_MESSAGE });
+  }
   const knownConsumers = new Set([
     READY_CONSUMER,
     EDIT_CONSUMER,
     PICKING_CONSUMER,
     PROBLEM_SOLVE_CONSUMER,
+    CUBISCAN_CONSUMER,
   ]);
   const otherConsumers = distinct(consumers.filter((value) => value && !knownConsumers.has(value)));
   if (otherConsumers.length > 0) {
@@ -338,6 +345,7 @@ export function cellHighlightClass(row, columnKey, { moveNeeded, columnClass = n
     const consumer = upper(row.consumer);
     if (consumer === EDIT_CONSUMER) return 'cell-action';
     if (consumer === PICKING_CONSUMER || consumer === PROBLEM_SOLVE_CONSUMER) return 'cell-info';
+    if (consumer === CUBISCAN_CONSUMER) return 'cell-cubiscan';
     if (consumer && consumer !== READY_CONSUMER) return 'cell-warn';
   }
   if (columnKey === 'disposition') {

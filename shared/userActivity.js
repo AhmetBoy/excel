@@ -38,10 +38,27 @@ export function locationOf(record) {
   return null;
 }
 
-/** "Kat 4 · A219" for P-4-A219B151; null when the address has another shape. */
+// Pick towers D and M have one floor; A, B, C (and any other) have several,
+// and "Kat 2" of A is a different place from "Kat 2" of B.
+const SINGLE_FLOOR_TOWERS = new Set(['D', 'M']);
+
+/**
+ * Where a bin is: P-4-A219B151 -> tower A, floor 4, aisle A219. `label` is
+ * "Kat 4 · A219", or just "D105" in a single-floor tower. Null when the
+ * address has another shape.
+ */
 export function zoneOf(bin) {
   const parsed = parseBinId(bin);
-  return parsed ? { floor: parsed.floor, aisle: `${parsed.tower}${parsed.aisle}` } : null;
+  if (!parsed) return null;
+  const aisle = `${parsed.tower}${parsed.aisle}`;
+  const multiFloor = !SINGLE_FLOOR_TOWERS.has(parsed.tower);
+  return {
+    tower: parsed.tower,
+    floor: parsed.floor,
+    aisle,
+    multiFloor,
+    label: multiFloor ? `Kat ${parsed.floor} · ${aisle}` : aisle,
+  };
 }
 
 function actionOf(record, timeMs) {
@@ -174,30 +191,41 @@ export function toolsSeen(summaries) {
 }
 
 /**
- * Where the associates currently doing the chosen action are, per floor and
- * aisle - e.g. two people stowing in the same aisle.
+ * Where the associates currently doing the chosen action are, per pick
+ * tower and floor, and per aisle - e.g. two people stowing in the same aisle.
+ * Single-floor towers (D, M) get no floor list.
  *
  * @param {Array<{ classification: { state: string, action: object|null } }>} rows
- * @returns {{ floors: Array<{ floor: string, count: number }>, crowdedAisles: Array<{ zone: string, logins: string[] }> }}
+ * @returns {{ towers: Array<{ tower: string, count: number, multiFloor: boolean, floors: Array<{ floor: string, count: number }> }>,
+ *   crowdedAisles: Array<{ zone: string, tower: string, logins: string[] }> }}
  */
 export function locationBreakdown(rows) {
-  const floors = new Map();
+  const towers = new Map();
   const aisles = new Map();
   for (const row of rows) {
     if (row.classification.state !== 'active') continue;
     const zone = zoneOf(row.classification.action?.bin);
     if (!zone) continue;
-    floors.set(zone.floor, (floors.get(zone.floor) ?? 0) + 1);
-    const key = `Kat ${zone.floor} · ${zone.aisle}`;
-    if (!aisles.has(key)) aisles.set(key, []);
-    aisles.get(key).push(row.login);
+    if (!towers.has(zone.tower)) {
+      towers.set(zone.tower, { tower: zone.tower, count: 0, multiFloor: zone.multiFloor, floors: new Map() });
+    }
+    const tower = towers.get(zone.tower);
+    tower.count++;
+    if (zone.multiFloor) tower.floors.set(zone.floor, (tower.floors.get(zone.floor) ?? 0) + 1);
+    if (!aisles.has(zone.label)) aisles.set(zone.label, { tower: zone.tower, logins: [] });
+    aisles.get(zone.label).logins.push(row.login);
   }
   return {
-    floors: [...floors.entries()]
-      .map(([floor, count]) => ({ floor, count }))
-      .sort((a, b) => b.count - a.count || a.floor.localeCompare(b.floor)),
+    towers: [...towers.values()]
+      .sort((a, b) => a.tower.localeCompare(b.tower))
+      .map((tower) => ({
+        ...tower,
+        floors: [...tower.floors.entries()]
+          .map(([floor, count]) => ({ floor, count }))
+          .sort((a, b) => Number(a.floor) - Number(b.floor)),
+      })),
     crowdedAisles: [...aisles.entries()]
-      .filter(([, logins]) => logins.length > 1)
-      .map(([zone, logins]) => ({ zone, logins })),
+      .filter(([, aisle]) => aisle.logins.length > 1)
+      .map(([zone, aisle]) => ({ zone, tower: aisle.tower, logins: aisle.logins })),
   };
 }

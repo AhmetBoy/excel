@@ -354,6 +354,12 @@ button:hover {
   color: #0b4a9e;
 }
 
+.verdict-cubiscan {
+  background: #34495e;
+  border-color: #22303c;
+  color: #ffffff;
+}
+
 .verdict-note {
   margin-top: 2px;
   font-size: 11px;
@@ -434,6 +440,12 @@ td.cell-hazmat {
 td.cell-info {
   background: #e3effd;
   color: #0b4a9e;
+  font-weight: 600;
+}
+
+td.cell-cubiscan {
+  background: #34495e;
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -1931,6 +1943,36 @@ body.locked #login-screen {
   font-size: 12px;
   font-weight: 700;
   margin: 4px 0;
+  color: #0b0b0b;
+}
+
+.ua-tower {
+  margin: 6px 0 8px;
+  max-width: 420px;
+}
+
+.ua-tower-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: #0b0b0b;
+}
+
+.ua-tower-total {
+  font-weight: 400;
+  color: #52514e;
+}
+
+.ua-tower .ua-floor-list {
+  padding-left: 10px;
+}
+
+/* Single-floor tower (D, M): the tower name is the bar label. */
+.ua-tower > .ua-floor-row .ua-floor-name {
+  width: 98px;
+  font-weight: 700;
   color: #0b0b0b;
 }
 

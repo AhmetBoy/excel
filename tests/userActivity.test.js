@@ -51,7 +51,9 @@ describe('locationOf / zoneOf', () => {
     expect(locationOf({ oldBin: 'tsXSA900154', newBin: 'P-4-A219B151' })).toBe('P-4-A219B151');
     expect(locationOf({ oldBin: 'P-2-A105C120', newBin: 'tsXSA900999' })).toBe('P-2-A105C120');
     expect(locationOf({ oldBin: 'tsX1', newBin: 'csXabcdefgh' })).toBeNull();
-    expect(zoneOf('P-4-A219B151')).toEqual({ floor: '4', aisle: 'A219' });
+    expect(zoneOf('P-4-A219B151')).toEqual({ tower: 'A', floor: '4', aisle: 'A219', multiFloor: true, label: 'Kat 4 · A219' });
+    // D and M have one floor: no "Kat" in the label.
+    expect(zoneOf('P-1-D105B110')).toMatchObject({ tower: 'D', multiFloor: false, label: 'D105' });
   });
 });
 
@@ -104,19 +106,27 @@ describe('toolsSeen / locationBreakdown', () => {
     expect(toolsSeen([a, b])).toEqual(['FCStowAppWebsite', 'MoveItemsApp']);
   });
 
-  it('counts active people per floor and flags a shared aisle', () => {
+  it('counts active people per pick tower and floor and flags a shared aisle', () => {
+    const active = (login, bin) => ({ login, classification: { state: 'active', action: { bin } } });
     const rows = [
-      { login: 'a', classification: { state: 'active', action: { bin: 'P-4-A219B151' } } },
-      { login: 'b', classification: { state: 'active', action: { bin: 'P-4-A219C101' } } },
-      { login: 'c', classification: { state: 'active', action: { bin: 'P-2-A105C120' } } },
+      active('a', 'P-4-A219B151'),
+      active('b', 'P-4-A219C101'),
+      active('c', 'P-2-A105C120'),
       { login: 'd', classification: { state: 'idle', action: { bin: 'P-2-A105C120' } } },
+      // same floor number, other tower: a different place
+      active('e', 'P-2-B105C120'),
+      active('f', 'P-1-D101A110'),
+      active('g', 'P-1-D140A110'),
+      active('h', 'P-1-M201A110'),
     ];
     expect(locationBreakdown(rows)).toEqual({
-      floors: [
-        { floor: '4', count: 2 },
-        { floor: '2', count: 1 },
+      towers: [
+        { tower: 'A', count: 3, multiFloor: true, floors: [{ floor: '2', count: 1 }, { floor: '4', count: 2 }] },
+        { tower: 'B', count: 1, multiFloor: true, floors: [{ floor: '2', count: 1 }] },
+        { tower: 'D', count: 2, multiFloor: false, floors: [] },
+        { tower: 'M', count: 1, multiFloor: false, floors: [] },
       ],
-      crowdedAisles: [{ zone: 'Kat 4 · A219', logins: ['a', 'b'] }],
+      crowdedAisles: [{ zone: 'Kat 4 · A219', tower: 'A', logins: ['a', 'b'] }],
     });
   });
 });

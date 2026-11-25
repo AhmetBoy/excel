@@ -434,16 +434,10 @@ async function runSellableFix(rows) {
   }
   const all = [...groups.values()].flat();
   const units = all.reduce((sum, item) => sum + item.quantity, 0);
-  const list = all.slice(0, 15).map((item) => `• ${item.scan} (${item.quantity} adet)`).join('
-');
-  const more = all.length > 15 ? `
-… ve ${all.length - 15} ürün daha` : '';
+  const list = all.slice(0, 15).map((item) => `• ${item.scan} (${item.quantity} adet)`).join('\n');
+  const more = all.length > 15 ? `\n… ve ${all.length - 15} ürün daha` : '';
   const ok = window.confirm(
-    `${[...groups.keys()].join(', ')} içindeki ${all.length} ürün (${units} adet) QT'de Sellable'a çekilecek:
-
-${list}${more}
-
-` +
+    `${[...groups.keys()].join(', ')} içindeki ${all.length} ürün (${units} adet) QT'de Sellable'a çekilecek:\n\n${list}${more}\n\n` +
       "QT EACH moduna alınır, her adet okutulup Inventory'ye (UNOWNED / SELLABLE) onaylanır. Devam edilsin mi?"
   );
   if (!ok) return;
@@ -533,7 +527,7 @@ function renderToteVerdict(rows, options) {
     for (const finding of verdict.findings) {
       const el = document.createElement('div');
       el.className = `verdict verdict-${finding.level}`;
-      const icon = { action: '✖', move: '➜', warn: '⚠', info: 'ℹ' }[finding.level] ?? '•';
+      const icon = { action: '✖', move: '➜', warn: '⚠', info: 'ℹ', cubiscan: '📏' }[finding.level] ?? '•';
       el.textContent = `${icon} ${finding.message}`;
       if (finding.code === TOTE_SCAN_CODE && RECEIVE_OPENABLE.test(lastToteNumber)) {
         el.appendChild(buildReceiveOpener(lastToteNumber));
