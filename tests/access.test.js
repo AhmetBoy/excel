@@ -23,10 +23,12 @@ describe('access profiles', () => {
     expect(JSON.stringify(config)).not.toContain(DEFAULT_PASSWORDS.temel);
   });
 
-  it('limits temel to its chosen features; tam and admin get all', async () => {
-    const config = { ...(await createDefaultConfig()), temelFeatures: ['barcode', 'stowmap', 'unknown'] };
+  it('limits temel to its chosen features; tam gets all but admin-only; admin gets all', async () => {
+    const config = { ...(await createDefaultConfig()), temelFeatures: ['barcode', 'stowmap', 'unknown', 'sellableFix'] };
     expect(featuresForRole(config, 'temel')).toEqual(['barcode', 'stowmap']);
-    expect(featuresForRole(config, 'tam')).toEqual(ALL_FEATURES);
+    expect(featuresForRole(config, 'tam')).toEqual(ALL_FEATURES.filter((f) => f !== 'sellableFix'));
+    expect(featuresForRole(config, 'tam')).not.toContain('sellableFix');
+    expect(featuresForRole(config, 'admin')).toContain('sellableFix');
     expect(featuresForRole(config, 'admin')).toEqual(ALL_FEATURES);
     expect(featuresForRole(config, null)).toEqual([]);
   });

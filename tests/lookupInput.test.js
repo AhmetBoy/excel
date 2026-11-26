@@ -45,6 +45,8 @@ describe('classifyLookupInput', () => {
     expect(classifyLookupInput('X001İFUFO5')).toMatchObject({ type: 'fnsku', query: 'X001IFUFO5' });
     expect(classifyLookupInput('b01ai2ygk4')).toMatchObject({ type: 'asin', query: 'B01AI2YGK4' });
     expect(classifyLookupInput('lpnuin14157565')).toMatchObject({ type: 'lpn', query: 'LPNUIN14157565' });
+    expect(classifyLookupInput('14157565')).toMatchObject({ kind: 'product', type: 'lpn', query: 'LPNUIN14157565' });
+    expect(classifyLookupInput('3245')).toMatchObject({ kind: 'container', query: 'tsXSA903245' });
     expect(classifyLookupInput('STOWERB')).toMatchObject({ kind: 'user', query: 'pc99stowerb' });
     expect(classifyLookupInput('STOWERİ')).toMatchObject({ kind: 'user', login: 'stoweri' });
   });

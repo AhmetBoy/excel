@@ -479,10 +479,14 @@ td.cell-warn {
   cursor: pointer;
 }
 
+/* Fixed height whether the image loaded, failed or is missing, so rows
+   don't jump while images arrive. */
 td.cell-image {
   width: 56px;
+  height: 56px;
   padding: 2px;
   text-align: center;
+  vertical-align: middle;
 }
 
 td.cell-image img {
@@ -491,6 +495,41 @@ td.cell-image img {
   height: 52px;
   margin: 0 auto;
   object-fit: contain;
+  cursor: zoom-in;
+}
+
+/* Large copy of a product image while the mouse is on it (imageZoom.js). */
+#image-zoom {
+  position: fixed;
+  z-index: 200;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+#image-zoom[hidden] {
+  display: none;
+}
+
+#image-zoom img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+#user-results img,
+#location-results img {
+  cursor: zoom-in;
+}
+
+/* All cells centred vertically, so rows with and without an image read
+   the same way. */
+#results-body td {
+  vertical-align: middle;
 }
 
 .image-missing {

@@ -257,6 +257,21 @@ const SOURCE_PLAN = {
 
 const skipped = (extra) => Promise.resolve({ status: 'skipped', ...extra });
 
+// An LPN that Inventory doesn't hold is looked up in its Inventory History
+// (miss / delete). One unit has few rows, so a long range costs little.
+const LPN_HISTORY_DAYS = 365;
+const isLpnQuery = (value) => /^LPN/i.test(value ?? '');
+
+async function resolveLpnHistory(lpn) {
+  const result = await fetchPagedSection(
+    'inventory-history',
+    { s: lpn, ...buildHistoryDateFields(new Date(), LPN_HISTORY_DAYS) },
+    'PARSE_INVENTORY_HISTORY_HTML',
+    'records'
+  );
+  return { status: result.status, records: result.items };
+}
+
 /**
  * Orchestrates one lookup (tote, bin or product barcode) across the
  * sources in SOURCE_PLAN. Each source is resolved independently so a
@@ -297,8 +312,10 @@ async function lookupTote(toteNumber, kind = 'container', sources = {}) {
   // FC Research product is asked by FCSku (gives the lot's Expiration Date
   // too), by ASIN only for a row without an FCSku.
   const productIds = [...new Set(inventory.records.map((r) => r.fcSku || r.asin).filter(Boolean))];
+  // LPN not in Inventory: where did it go?
+  const lpnHistoryAsked = kind === 'product' && isLpnQuery(toteNumber) && inventory.records.length === 0;
 
-  const [pandash, product, sideline, qt, history, prep] = await Promise.all([
+  const [pandash, product, sideline, qt, history, prep, lpnHistory] = await Promise.all([
     timed('pandash', resolvePandash(distinctAsins)),
     timed('product', resolveProducts(productIds)),
     plan.sideline
@@ -307,6 +324,7 @@ async function lookupTote(toteNumber, kind = 'container', sources = {}) {
     qtPromise,
     historyPromise,
     plan.prep ? timed('prep', resolvePrep(distinctAsins)) : skipped({ matches: [] }),
+    lpnHistoryAsked ? timed('history', resolveLpnHistory(toteNumber)) : skipped({ records: [] }),
   ]);
   timings.total = Date.now() - startedAt;
   timings.asins = distinctAsins.length;
@@ -319,6 +337,7 @@ async function lookupTote(toteNumber, kind = 'container', sources = {}) {
     productMatches: product.matches,
     prepMatches: prep.matches,
     qtProducts: qt.products,
+    qtRequested: plan.qt,
   });
 
   const sourceStatus = {
@@ -330,12 +349,22 @@ async function lookupTote(toteNumber, kind = 'container', sources = {}) {
   if (plan.qt) sourceStatus.qt = qt.status;
   if (plan.history) sourceStatus.history = history.status;
   if (plan.prep) sourceStatus.prep = prep.status;
+  if (lpnHistoryAsked) sourceStatus.history = lpnHistory.status;
 
   // Why a source failed, shown as the badge's tooltip (only QT sends one).
   const sourceMessages = {};
   if (plan.qt && qt.message) sourceMessages.qt = qt.message;
 
-  return { toteNumber, kind, rows, sourceStatus, sourceMessages, timings, locationHistory: history.records };
+  return {
+    toteNumber,
+    kind,
+    rows,
+    sourceStatus,
+    sourceMessages,
+    timings,
+    locationHistory: history.records,
+    lpnHistory: lpnHistoryAsked ? lpnHistory.records : null,
+  };
 }
 
 // Safety cap on "-more" pages of one FC Research section.

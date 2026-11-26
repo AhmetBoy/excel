@@ -4,6 +4,7 @@ import { normalizeValue } from '../normalize.js';
 const COLUMN_IDS = {
   date: 'date',
   op: 'op',
+  rs: 'rs',
   asin: 'asin',
   fnsku: 'fnSku',
   fcsku: 'fcSku',

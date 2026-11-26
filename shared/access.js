@@ -17,9 +17,14 @@ export const FEATURES = [
   { id: 'stowmap', label: 'StowMap' },
   { id: 'rozet', label: 'Rozet (hatalı stow takibi)' },
   { id: 'userAnalysis', label: 'Kullanıcı Analizi (son işlemler)' },
-  { id: 'sellableFix', label: "Sellable'a çek (QT'de PENDING_RESEARCH / EXPIRED düzeltme)" },
+  { id: 'sellableFix', label: "Sellable'a çek (QT'de PENDING_RESEARCH / EXPIRED düzeltme)", adminOnly: true },
 ];
 export const ALL_FEATURES = FEATURES.map((f) => f.id);
+// Features only the admin profile gets (they write to QT); never given to
+// tam, and not offered in the temel feature list.
+export const ADMIN_ONLY_FEATURES = FEATURES.filter((f) => f.adminOnly).map((f) => f.id);
+// Features the admin may hand to the temel profile in Yönetim.
+export const TEMEL_SELECTABLE_FEATURES = FEATURES.filter((f) => !f.adminOnly);
 export const DEFAULT_TEMEL_FEATURES = ['barcode'];
 
 // First-run passwords; the Yönetim tab warns until they are changed.
@@ -55,8 +60,10 @@ export async function roleForPassword(config, password) {
 
 /** Feature ids a role may use. */
 export function featuresForRole(config, role) {
-  if (role === 'tam' || role === 'admin') return [...ALL_FEATURES];
-  if (role === 'temel') return (config?.temelFeatures ?? DEFAULT_TEMEL_FEATURES).filter((f) => ALL_FEATURES.includes(f));
+  if (role === 'admin') return [...ALL_FEATURES];
+  const shared = ALL_FEATURES.filter((f) => !ADMIN_ONLY_FEATURES.includes(f));
+  if (role === 'tam') return shared;
+  if (role === 'temel') return (config?.temelFeatures ?? DEFAULT_TEMEL_FEATURES).filter((f) => shared.includes(f));
   return [];
 }
 

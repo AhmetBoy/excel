@@ -59,6 +59,8 @@ function disambiguateByTitleAndQuantity(candidates, inventoryRecord) {
  * @param {Array<object>} [input.productMatches] - { asin, highValue, imageUrl } per ASIN, from FC Research product
  * @param {Array<object>} [input.prepMatches] - { asin, prep } per ASIN, from Prep Instructions Manager
  * @param {Array<object>} input.qtProducts - from parseQtDatelotHtml().products
+ * @param {boolean} [input.qtRequested] - false when QT wasn't asked (its box
+ *   unticked): rows then say nothing about QT instead of "QT: Veri yok"
  * @returns {{ rows: Array<object>, matchedQtCount: number, totalQtCount: number }}
  */
 export function buildResultRows({
@@ -68,6 +70,7 @@ export function buildResultRows({
   productMatches = [],
   prepMatches = [],
   qtProducts = [],
+  qtRequested = true,
 }) {
   const usedQtProducts = new Set();
 
@@ -78,10 +81,10 @@ export function buildResultRows({
     const product = findMatchByAsin(productMatches, inv.fcSku) ?? findMatchByAsin(productMatches, inv.asin);
     const prep = findMatchByAsin(prepMatches, inv.asin);
 
-    let qtMatchStatus = 'no_fcsku';
+    let qtMatchStatus = qtRequested ? 'no_fcsku' : 'not_requested';
     let qtProduct = null;
 
-    if (inv.fcSku) {
+    if (qtRequested && inv.fcSku) {
       let candidates = findQtCandidatesByFcSku(qtProducts, inv.fcSku);
       if (candidates.length > 1) {
         candidates = disambiguateByTitleAndQuantity(candidates, inv);

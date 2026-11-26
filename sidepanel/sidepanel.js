@@ -17,6 +17,7 @@ import {
   isMoveNeeded,
 } from '../shared/toteChecks.js';
 import { classifyLookupInput } from '../shared/lookupInput.js';
+import { lpnGuidance } from '../shared/lpnGuidance.js';
 import { isFeatureAllowed } from '../shared/access.js';
 import { renderUserResults } from './userResults.js';
 import { renderLocationResults } from './locationResults.js';
@@ -65,6 +66,7 @@ const toastEl = document.getElementById('toast');
 const lastToteEl = document.getElementById('last-tote');
 const lastToteValueEl = document.getElementById('last-tote-value');
 const copyToteButton = document.getElementById('copy-tote-button');
+const researchToteButton = document.getElementById('research-tote-button');
 const copyFeedbackEl = document.getElementById('copy-feedback');
 const autoCopyInput = document.getElementById('auto-copy-input');
 const userResultsEl = document.getElementById('user-results');
@@ -323,6 +325,7 @@ function setLoading(isLoading) {
   loadingEl.hidden = !isLoading;
   searchButton.disabled = isLoading;
   toteInput.disabled = isLoading;
+  researchToteButton.disabled = isLoading;
 }
 
 // Readies the input for the next scan: clears it and puts the cursor back,
@@ -552,6 +555,28 @@ function renderToteVerdict(rows, options) {
   toteVerdictEl.hidden = false;
 }
 
+// LPN scan: one unit, one place - say what to do with it.
+function renderLpnGuidance(response) {
+  const guidance = lpnGuidance({
+    rows: (response.rows ?? []).filter((row) => row.qtMatchStatus !== 'qt_only_unmatched'),
+    history: response.lpnHistory ?? [],
+    historyStatus: response.sourceStatus?.history,
+  });
+  if (!guidance) return;
+  const icon = { action: '✖', move: '➜', warn: '⚠', info: 'ℹ' }[guidance.level] ?? '•';
+  const box = document.createElement('div');
+  box.className = `verdict verdict-${guidance.level}`;
+  box.textContent = `${icon} ${guidance.message}`;
+  if (guidance.detail) {
+    const note = document.createElement('div');
+    note.className = 'verdict-note';
+    note.textContent = guidance.detail;
+    box.appendChild(note);
+  }
+  toteVerdictEl.replaceChildren(box);
+  toteVerdictEl.hidden = false;
+}
+
 function applyFilterAndRender() {
   const filtered = filterRows(lastRows, filterInput.value);
   const highlightContext = {
@@ -574,7 +599,12 @@ function applyFilterAndRender() {
  * @param {string} toteNumber - the scanned value
  * @param {'container'|'location'|'product'} [kind]
  */
+// Each lookup gets a number; an answer that arrives after a newer lookup
+// started is dropped, so an old tote's rows can never land in the table.
+let lookupSeq = 0;
+
 async function runLookup(toteNumber, kind = 'container') {
+  const seq = ++lookupSeq;
   setLoading(true);
   clearToasts();
   retryButton.hidden = true;
@@ -583,13 +613,18 @@ async function runLookup(toteNumber, kind = 'container') {
 
   try {
     const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_TOTE', toteNumber, kind, sources: selectedSources() });
+    if (seq !== lookupSeq) return;
     if (!response) {
       throw new Error('Arka plan betiğinden yanıt alınamadı.');
     }
 
+    const allowSellable = kind === 'container' && (await isFeatureAllowed('sellableFix'));
+    if (seq !== lookupSeq) return;
+    // Rows, kind and the İşlem flag change together, right before the head
+    // and body are drawn from them, so the two always have the same columns.
     lastRows = response.rows ?? [];
     lastKind = kind;
-    sellableAllowed = kind === 'container' && (await isFeatureAllowed('sellableFix'));
+    sellableAllowed = allowSellable;
     buildTableHead();
     renderSourceStatus(response.sourceStatus ?? {}, response.sourceMessages ?? {}, response.timings ?? {});
     const pandashStatus = response.sourceStatus?.pandash;
@@ -599,6 +634,7 @@ async function runLookup(toteNumber, kind = 'container') {
     // Stow-readiness rules are about a tote; a bin or product search skips them.
     const isTote = kind === 'container';
     renderToteVerdict(isTote ? lastRows : [], { pandashOk, qtStatus: response.sourceStatus?.qt });
+    if (kind === 'product' && /^LPN/i.test(toteNumber)) renderLpnGuidance(response);
     filterBarEl.hidden = false;
     resultsWrapperEl.hidden = false;
     applyFilterAndRender();
@@ -615,13 +651,16 @@ async function runLookup(toteNumber, kind = 'container') {
       showToast(HRV_TOAST_MESSAGE, { variant: 'info' });
     }
   } catch (error) {
+    if (seq !== lookupSeq) return;
     renderToteVerdict([]);
     renderErrorBadge(error?.message ?? error);
     retryButton.hidden = false;
   } finally {
-    setLoading(false);
-    // Disabling the input during loading drops its focus; restore it here.
-    prepareForNextScan();
+    if (seq === lookupSeq) {
+      setLoading(false);
+      // Disabling the input during loading drops its focus; restore it here.
+      prepareForNextScan();
+    }
   }
 }
 
@@ -651,6 +690,7 @@ function openContainer(scannableId) {
  * pc99<login> with a barcode each, plus their Inventory contents.
  */
 async function runUserLookup({ login, query }) {
+  const seq = ++lookupSeq;
   setLoading(true);
   clearToasts();
   retryButton.hidden = true;
@@ -659,6 +699,7 @@ async function runUserLookup({ login, query }) {
 
   try {
     const response = await chrome.runtime.sendMessage({ type: 'LOOKUP_USER', login, query });
+    if (seq !== lookupSeq) return;
     if (!response) throw new Error('Arka plan betiğinden yanıt alınamadı.');
     if (response.status === 'error') throw new Error(response.message ?? 'İstek başarısız');
 
@@ -666,11 +707,14 @@ async function runUserLookup({ login, query }) {
     renderUserResults(userResultsEl, response, openContainer);
     userResultsEl.hidden = false;
   } catch (error) {
+    if (seq !== lookupSeq) return;
     renderErrorBadge(error?.message ?? error);
     retryButton.hidden = false;
   } finally {
-    setLoading(false);
-    prepareForNextScan();
+    if (seq === lookupSeq) {
+      setLoading(false);
+      prepareForNextScan();
+    }
   }
 }
 
@@ -705,6 +749,11 @@ filterInput.addEventListener('input', applyFilterAndRender);
 copyToteButton.addEventListener('click', () => {
   copyToteNumber(lastToteNumber);
   toteInput.focus();
+});
+
+// Searches the shown value again (e.g. after fixing something in QT).
+researchToteButton.addEventListener('click', () => {
+  if (lastToteNumber) runSearch(lastToteNumber);
 });
 
 autoCopyInput.addEventListener('change', () => {

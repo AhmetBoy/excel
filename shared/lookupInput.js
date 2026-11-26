@@ -99,6 +99,14 @@ export const LOOKUP_RULES = [
     build: (m) => ({ query: m[0].toUpperCase() }),
   },
   {
+    // 8 digits = the number part of an LPN (13354754 -> LPNUIN13354754).
+    kind: 'product',
+    type: 'lpn',
+    label: 'LPN',
+    match: /^\d{8}$/,
+    build: (m) => ({ query: `LPNUIN${m[0]}` }),
+  },
+  {
     // Bin address, e.g. P-1-A200A100
     kind: 'location',
     type: 'location',

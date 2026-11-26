@@ -134,6 +134,16 @@ describe('buildResultRows', () => {
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.asin)).toEqual(['B0A', 'B0B']);
   });
+
+  it('says nothing about QT when QT was not asked', () => {
+    const { rows } = buildResultRows({
+      inventoryRecords: [inv({ fcSku: 'FC123' }), inv({ asin: 'B0B', fcSku: null })],
+      qtProducts: [],
+      qtRequested: false,
+    });
+
+    expect(rows.map((r) => r.qtMatchStatus)).toEqual(['not_requested', 'not_requested']);
+  });
 });
 
 describe('buildResultRows FC Research product by FCSku', () => {

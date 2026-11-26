@@ -6,7 +6,7 @@
 import {
   changePassword,
   CONFIG_KEY,
-  FEATURES,
+  TEMEL_SELECTABLE_FEATURES,
   featuresForRole,
   loadConfig,
   roleForPassword,
@@ -130,13 +130,13 @@ function renderAdmin() {
 
   const enabled = new Set(config.temelFeatures ?? []);
   featuresEl.replaceChildren(
-    ...FEATURES.map((feature) => {
+    ...TEMEL_SELECTABLE_FEATURES.map((feature) => {
       const label = document.createElement('label');
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = enabled.has(feature.id);
       box.addEventListener('change', () => {
-        const next = FEATURES.map((f) => f.id).filter((id) =>
+        const next = TEMEL_SELECTABLE_FEATURES.map((f) => f.id).filter((id) =>
           id === feature.id ? box.checked : enabled.has(id)
         );
         chrome.storage.local.set({ [CONFIG_KEY]: { ...config, temelFeatures: next } });
