@@ -2282,3 +2282,115 @@ body.locked #login-screen {
 .locbar-summary-pending {
   color: #8a4b00;
 }
+
+/* ---------- Batch tab ---------- */
+
+.batch-hint {
+  font-size: 11px;
+  color: #666;
+  margin: 0 0 8px;
+}
+
+#batch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.batch-row {
+  display: flex;
+  gap: 6px;
+}
+
+.batch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #555;
+}
+
+.batch-field input,
+.batch-field select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.batch-field-note {
+  flex: 2;
+}
+
+#batch-code {
+  font-family: ui-monospace, monospace;
+  text-transform: uppercase;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.batch-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.batch-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  background: #f1f3f4;
+  color: #333;
+  cursor: pointer;
+}
+
+.batch-chip-done {
+  background: #e6f4ea;
+  border-color: #9bd3a9;
+  color: #1e6b34;
+}
+
+.batch-list-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+#batch-filter {
+  flex: 1;
+}
+
+.batch-table-wrapper {
+  overflow-x: auto;
+}
+
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.batch-table th,
+.batch-table td {
+  border-bottom: 1px solid #e5e5e5;
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.batch-table th {
+  background: #f7f7f7;
+  font-weight: 600;
+}
+
+.batch-code-cell {
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}

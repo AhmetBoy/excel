@@ -34,6 +34,7 @@
     <button class="tab" type="button" role="tab" data-tab="stowmap">StowMap</button>
     <button class="tab" type="button" role="tab" data-tab="rozet">Rozet <span id="rozet-tab-count" class="tab-count" hidden></span></button>
     <button class="tab" type="button" role="tab" data-tab="userAnalysis">Analiz</button>
+    <button class="tab" type="button" role="tab" data-tab="batch">Batch</button>
     <button class="tab" type="button" role="tab" data-tab="admin">Yönetim</button>
   </nav>
 
@@ -369,6 +370,58 @@
     <div id="ua-floors" class="ua-floors"></div>
   </section>
 
+  <section id="tab-batch" class="tab-panel" hidden>
+    <p class="hint batch-hint">
+      Batch kod örnekleri: markayı seçin, batch kodu ve bildiğiniz üretim tarihini ve/veya SKT'yi yazın.
+      Tarih 15.04.2027 veya sadece ay 04.2027 olabilir. Yeterli örnek olunca CSV'yi dışa aktarın.
+    </p>
+    <form id="batch-form" autocomplete="off">
+      <div class="batch-row">
+        <label class="batch-field batch-field-brand">Marka
+          <input id="batch-brand" type="text" list="batch-brand-list" placeholder="Ara / seç…" spellcheck="false" />
+          <datalist id="batch-brand-list"></datalist>
+        </label>
+        <label class="batch-field batch-field-code">Batch kod
+          <input id="batch-code" type="text" placeholder="ör. 92131001" spellcheck="false" />
+        </label>
+      </div>
+      <div class="batch-row">
+        <label class="batch-field">Üretim tarihi
+          <input id="batch-production" type="text" placeholder="GG.AA.YYYY / AA.YYYY" inputmode="numeric" />
+        </label>
+        <label class="batch-field">SKT
+          <input id="batch-expiry" type="text" placeholder="GG.AA.YYYY / AA.YYYY" inputmode="numeric" />
+        </label>
+      </div>
+      <div class="batch-row">
+        <label class="batch-field">Kaynak
+          <select id="batch-source"></select>
+        </label>
+        <label class="batch-field batch-field-note">Not (ürün / ASIN, isteğe bağlı)
+          <input id="batch-note" type="text" placeholder="ör. Nivea Men krem 150ml" />
+        </label>
+      </div>
+      <div class="batch-actions">
+        <button type="submit">Kaydet</button>
+        <button id="batch-export" type="button" class="btn-secondary">CSV olarak dışa aktar</button>
+      </div>
+    </form>
+    <div id="batch-status" class="locbar-status" aria-live="polite" hidden></div>
+    <div id="batch-counts" class="batch-counts"></div>
+    <div class="batch-list-bar">
+      <input id="batch-filter" type="search" placeholder="Listede ara (marka, kod, not)" spellcheck="false" />
+      <span id="batch-total" class="hint"></span>
+    </div>
+    <div class="batch-table-wrapper">
+      <table class="batch-table">
+        <thead>
+          <tr><th>Marka</th><th>Batch kod</th><th>Üretim</th><th>SKT</th><th>Kaynak</th><th>Not</th><th></th></tr>
+        </thead>
+        <tbody id="batch-body"></tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="tab-admin" class="tab-panel" hidden>
     <p id="admin-default-warning" class="admin-warning" hidden></p>
 
@@ -404,6 +457,7 @@
   <script type="module" src="stowMapTab.js"></script>
   <script type="module" src="rozetTab.js"></script>
   <script type="module" src="userAnalysisTab.js"></script>
+  <script type="module" src="batchTab.js"></script>
   <script type="module" src="accessUi.js"></script>
   <script type="module" src="imageZoom.js"></script>
 </body>

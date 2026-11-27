@@ -26,6 +26,7 @@ const tabPanels = {
   stowmap: document.getElementById('tab-stowmap'),
   rozet: document.getElementById('tab-rozet'),
   userAnalysis: document.getElementById('tab-userAnalysis'),
+  batch: document.getElementById('tab-batch'),
   admin: document.getElementById('tab-admin'),
 };
 

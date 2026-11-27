@@ -52,7 +52,7 @@ function applyRole() {
   roleBadge.classList.toggle('is-admin', role === 'admin');
 
   const allowed = new Set(featuresForRole(config, role));
-  for (const feature of ['report', 'barcode', 'stowmap', 'rozet', 'userAnalysis']) {
+  for (const feature of ['report', 'barcode', 'stowmap', 'rozet', 'userAnalysis', 'batch']) {
     tabButton(feature).hidden = !allowed.has(feature);
   }
   tabButton('admin').hidden = role !== 'admin';

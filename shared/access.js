@@ -17,6 +17,7 @@ export const FEATURES = [
   { id: 'stowmap', label: 'StowMap' },
   { id: 'rozet', label: 'Rozet (hatalı stow takibi)' },
   { id: 'userAnalysis', label: 'Kullanıcı Analizi (son işlemler)' },
+  { id: 'batch', label: 'Batch kod örnekleri' },
   { id: 'sellableFix', label: "Sellable'a çek (QT'de PENDING_RESEARCH / EXPIRED düzeltme)", adminOnly: true },
 ];
 export const ALL_FEATURES = FEATURES.map((f) => f.id);
