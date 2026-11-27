@@ -631,6 +631,35 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+// Barkod › Lokasyon: product image / HRV per ASIN, kept while the service
+// worker lives so the same product in many bins is asked once.
+const binProductCache = new Map();
+const BIN_PRODUCT_CACHE_MAX = 3000;
+
+/** The Inventory rows of one bin, plus image / HRV of each of its ASINs. */
+async function binInventory(bin) {
+  const inventory = await resolveInventory(bin);
+  const asins = [...new Set(inventory.records.map((r) => r.asin).filter(Boolean))];
+  if (binProductCache.size > BIN_PRODUCT_CACHE_MAX) binProductCache.clear();
+  const product = await resolveProducts(asins, binProductCache);
+  const products = product.matches.map(({ asin, imageUrl, highValue, title }) => ({ asin, imageUrl, highValue, title }));
+  return { ...inventory, products };
+}
+
+// Barkod › Lokasyon: the Inventory rows of one bin, for its product barcodes.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== 'BIN_INVENTORY') return undefined;
+
+  isFeatureAllowed('barcode')
+    .then((allowed) =>
+      allowed ? binInventory(message.bin) : { status: 'error', records: [], message: 'Bu özellik giriş yapılan profilde kapalı.' }
+    )
+    .then(sendResponse)
+    .catch((error) => sendResponse({ status: 'error', records: [], message: String(error?.message ?? error) }));
+
+  return true;
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'LOOKUP_TOTE') return undefined;
 

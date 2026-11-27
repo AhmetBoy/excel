@@ -170,6 +170,12 @@
   </section>
 
   <section id="tab-barcode" class="tab-panel" hidden>
+    <div class="subtabs" role="tablist">
+      <button class="subtab active" type="button" data-subtab="list">Liste</button>
+      <button class="subtab" type="button" data-subtab="location">Lokasyon</button>
+    </div>
+
+    <div id="barcode-pane-list" class="subtab-pane">
     <form id="barcode-form">
       <textarea
         id="barcode-input"
@@ -180,6 +186,40 @@
       <button id="barcode-button" type="submit">Barkod Oluştur</button>
     </form>
     <div id="barcode-output" class="barcode-grid"></div>
+    </div>
+
+    <div id="barcode-pane-location" class="subtab-pane" hidden>
+      <form id="locbar-form">
+        <input
+          id="locbar-input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="P-1-A219 · P-1-A219D · P-1-A219 220-225 · P-1-A219..221"
+        />
+        <button type="submit">Göster</button>
+      </form>
+      <div class="locbar-options">
+        <label class="checkbox-label" title="StowMap 'Can Hold High Value Asins' = true olan binler">
+          <input id="locbar-hrv" type="checkbox" /> Sadece HRV alabilen binler
+        </label>
+        <label class="checkbox-label" title="Göster'e basınca her binin ürünlerini (barkod, görsel) kendiliğinden getirir. Bin başına bir Inventory isteği + her yeni ürün için bir FC Research isteği.">
+          <input id="locbar-auto-products" type="checkbox" /> Ürün bilgilerini otomatik getir
+        </label>
+        <label class="checkbox-label" title="Consumer'ı PENDING_RESEARCH olan ürünler. StowMap'te bu bilgi yok, bu yüzden her binin ürünleri Inventory'den getirilir.">
+          <input id="locbar-pending" type="checkbox" /> Sadece PENDING_RESEARCH ürünler
+        </label>
+        <label class="checkbox-label" title="LPN'i olan ürünler. StowMap'te bu bilgi yok, bu yüzden her binin ürünleri Inventory'den getirilir. PENDING_RESEARCH ile birlikte seçilirse ikisine de uyanlar gelir.">
+          <input id="locbar-lpn" type="checkbox" /> Sadece LPN'li ürünler
+        </label>
+        <label class="checkbox-label" title="FC Research'te High Value olarak işaretli ürünler (binin HRV alabilmesinden farklı). Her binin ürünleri Inventory + FC Research'ten getirilir. Diğer ürün filtreleriyle birlikte seçilirse hepsine uyanlar gelir.">
+          <input id="locbar-hrv-products" type="checkbox" /> Sadece HRV ürünler
+        </label>
+      </div>
+      <div class="hint">StowMap sekmesine yüklenen BinStatus CSV'sine göre dolu binler gösterilir. Ürün barkodları (LPN → X → B) bine tıklayınca Inventory'den gelir.</div>
+      <div id="locbar-status"></div>
+      <div id="locbar-output"></div>
+    </div>
   </section>
 
   <section id="tab-stowmap" class="tab-panel" hidden>
@@ -360,6 +400,7 @@
   <script type="module" src="sidepanel.js"></script>
   <script type="module" src="reportTab.js"></script>
   <script type="module" src="barcodeTab.js"></script>
+  <script type="module" src="locationBarcodeTab.js"></script>
   <script type="module" src="stowMapTab.js"></script>
   <script type="module" src="rozetTab.js"></script>
   <script type="module" src="userAnalysisTab.js"></script>

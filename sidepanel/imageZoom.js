@@ -2,7 +2,7 @@
 // image URL is already the full-size picture, so no extra request is made.
 // Works for every product image in the lookup, associate and bin results.
 
-const ZOOM_SCOPE = '#results-body, #user-results, #location-results';
+const ZOOM_SCOPE = '#results-body, #user-results, #location-results, #locbar-output';
 const MAX_SIZE = 320;
 const MARGIN = 8;
 
